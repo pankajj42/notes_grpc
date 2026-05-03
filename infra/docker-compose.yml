@@ -1,0 +1,40 @@
+services:
+  auth-db:
+    image: postgres:16
+    container_name: notes-auth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notes_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notes-db:
+    image: postgres:16
+    container_name: notes-notes-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notes_notes
+    ports:
+      - "5433:5432"
+    volumes:
+      - notes_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_notes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  auth_db_data:
+  notes_db_data:
