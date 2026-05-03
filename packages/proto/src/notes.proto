@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package notes;
+
+/**
+ * Notes Service
+ *
+ * Handles CRUD operations for user notes.
+ * All endpoints require a valid access token in gRPC metadata
+ * (key: "authorization", value: "Bearer <token>").
+ *
+ * Proto Evolution Rules:
+ * - Never reuse field numbers
+ * - Always append new fields to end of message
+ * - Mark deprecated fields with [deprecated = true]
+ * - Use reserved for fields/numbers that must never be reused
+ */
+
+service NotesService {
+  // Create a new note for the authenticated user
+  rpc CreateNote(CreateNoteRequest) returns (Note);
+
+  // Retrieve paginated list of notes for the authenticated user
+  rpc GetNotes(GetNotesRequest) returns (GetNotesResponse);
+
+  // Retrieve a specific note by ID
+  rpc GetNote(GetNoteRequest) returns (Note);
+
+  // Update a note's title and/or content
+  rpc UpdateNote(UpdateNoteRequest) returns (Note);
+
+  // Delete a note
+  rpc DeleteNote(DeleteNoteRequest) returns (Empty);
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum NoteContentType {
+  TEXT = 0; // Plain text content
+  LIST = 1; // Bulleted/checklist items (stored as JSON array)
+}
+
+// ============================================================================
+// REQUEST/RESPONSE MESSAGES
+// ============================================================================
+
+message CreateNoteRequest {
+  string title = 1; // Note title (required, max 255 chars)
+  string content = 2; // Note content (required for TEXT; JSON array for LIST)
+  NoteContentType contentType = 3; // Type of content (TEXT or LIST)
+}
+
+message GetNotesRequest {
+  int32 page = 1; // Page number (1-indexed, default 1)
+  int32 pageSize = 2; // Items per page (default 20, max 100)
+  string sortBy = 3; // Sort field: "createdAt" (default), "updatedAt", "title"
+  string sortOrder = 4; // "asc" or "desc" (default "desc")
+}
+
+message GetNotesResponse {
+  repeated Note notes = 1;
+  PaginationMetadata pagination = 2;
+}
+
+message GetNoteRequest {
+  string noteId = 1; // UUID of the note to retrieve
+}
+
+message UpdateNoteRequest {
+  string noteId = 1; // UUID of note to update
+  string title = 2; // New title (optional, omit to keep current)
+  string content = 3; // New content (optional, omit to keep current)
+  NoteContentType contentType = 4; // New content type (optional)
+}
+
+message DeleteNoteRequest {
+  string noteId = 1; // UUID of note to delete
+}
+
+// ============================================================================
+// DATA MODELS
+// ============================================================================
+
+message Note {
+  string id = 1; // UUID of the note
+  string userId = 2; // User UUID (owner)
+  string title = 3; // Note title
+  string content = 4; // Note content (TEXT or JSON array for LIST)
+  NoteContentType contentType = 5; // Type of content
+  string createdAt = 6; // ISO 8601 timestamp (set by server)
+  string updatedAt = 7; // ISO 8601 timestamp (set by server)
+}
+
+message PaginationMetadata {
+  int32 total = 1; // Total number of items across all pages
+  int32 page = 2; // Current page number (1-indexed)
+  int32 pageSize = 3; // Items per page
+  int32 totalPages = 4; // Total number of pages
+}
+
+message Empty {
+  // No fields
+}

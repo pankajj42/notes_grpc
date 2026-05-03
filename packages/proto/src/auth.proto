@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package auth;
+
+/**
+ * Auth Service
+ *
+ * Handles user authentication, session management, and JWT token lifecycle.
+ * All endpoints except Login and Signup require a valid access token in gRPC metadata
+ * (key: "authorization", value: "Bearer <token>").
+ *
+ * Proto Evolution Rules:
+ * - Never reuse field numbers
+ * - Always append new fields to end of message
+ * - Mark deprecated fields with [deprecated = true]
+ * - Use reserved for fields/numbers that must never be reused
+ */
+
+service AuthService {
+  // Register a new user and return tokens
+  rpc Signup(SignupRequest) returns (AuthResponse);
+
+  // Authenticate user with email/password and return tokens
+  rpc Login(LoginRequest) returns (AuthResponse);
+
+  // Exchange refresh token for new access and refresh tokens
+  rpc RefreshToken(RefreshTokenRequest) returns (AuthResponse);
+
+  // Retrieve the service's public key for JWT validation (public, no auth required)
+  rpc GetPublicKey(GetPublicKeyRequest) returns (PublicKeyResponse);
+
+  // List all active sessions for the authenticated user
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // Log out a specific session (revoke refresh token)
+  rpc LogoutSession(LogoutSessionRequest) returns (Empty);
+}
+
+// ============================================================================
+// REQUEST/RESPONSE MESSAGES
+// ============================================================================
+
+message SignupRequest {
+  string email = 1; // User email (must be unique, validated as email format)
+  string password = 2; // Plaintext password (min 8 chars, 1 upper, 1 lower, 1 digit, 1 special)
+  string deviceName = 3; // Display name for this device/session (e.g., "Chrome on Windows")
+}
+
+message LoginRequest {
+  string email = 1; // User email
+  string password = 2; // Plaintext password
+  string deviceName = 3; // Display name for this device/session
+}
+
+message RefreshTokenRequest {
+  string refreshToken = 1; // The refresh token to exchange
+}
+
+message AuthResponse {
+  string accessToken = 1; // JWT access token (expires in 15 minutes)
+  string refreshToken = 2; // Refresh token (expires in 30 days)
+  UserInfo user = 3; // Authenticated user info
+}
+
+message UserInfo {
+  string userId = 1; // User UUID
+  string email = 2; // User email
+}
+
+message GetPublicKeyRequest {
+  // No fields required
+}
+
+message PublicKeyResponse {
+  string publicKey = 1; // RSA public key in PEM format (for JWT verification)
+}
+
+message ListSessionsRequest {
+  // No fields required (user ID comes from JWT metadata)
+}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string sessionId = 1; // UUID of this session
+  string deviceName = 2; // User-provided device name
+  string createdAt = 3; // ISO 8601 timestamp
+  string lastActivityAt = 4; // ISO 8601 timestamp of last token refresh
+  bool isCurrent = 5; // True if this is the session making the request
+}
+
+message LogoutSessionRequest {
+  string sessionId = 1; // UUID of session to revoke
+}
+
+message Empty {
+  // No fields
+}
