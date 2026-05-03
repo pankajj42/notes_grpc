@@ -1,0 +1,14 @@
+{
+  "name": "@notes/grpc-clients",
+  "version": "1.0.0",
+  "description": "gRPC clients for Notes application",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Pankaj Jangid",
+  "license": "ISC",
+  "packageManager": "pnpm@10.32.1"
+}

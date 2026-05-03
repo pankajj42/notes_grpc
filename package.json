@@ -1,0 +1,32 @@
+{
+  "name": "notes_grpc",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Notes application with microservices architecture using gRPC",
+  "engines": {
+    "node": ">=24.14.0",
+    "pnpm": ">=10.32.1"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "build": "pnpm -r run build",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "Pankaj Jangid",
+  "license": "ISC",
+  "packageManager": "pnpm@10.32.1",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vitest/coverage-v8": "^4.1.5",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1",
+    "vitest": "^4.1.5"
+  }
+}
