@@ -356,8 +356,6 @@ t=4  Legit user next call  → 401, forced to re-login
 
 **Commit**: `feat(security): add refresh token reuse detection and session revocation`
 
-**Commit**: `feat(security): add refresh token reuse detection and session revocation`
-
 ---
 
 ### 6.3 Abuse controls
