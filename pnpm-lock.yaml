@@ -75,6 +75,9 @@ importers:
 
   apps/gateway:
     dependencies:
+      '@notes/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -84,6 +87,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      zod:
+        specifier: ^4.4.2
+        version: 4.4.2
 
   apps/notes-service:
     dependencies:
@@ -100,7 +106,11 @@ importers:
 
   packages/proto: {}
 
-  packages/shared-types: {}
+  packages/shared-types:
+    dependencies:
+      zod:
+        specifier: ^4.4.2
+        version: 4.4.2
 
 packages:
 
@@ -1586,6 +1596,9 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod@4.4.2:
+    resolution: {integrity: sha512-IynmDyxsEsb9RKzO3J9+4SxXnl2FTFSzNBaKKaMV6tsSk0rw9gYw9gs+JFCq/qk2LCZ78KDwyj+Z289TijSkUw==}
+
 snapshots:
 
   '@babel/helper-string-parser@7.27.1': {}
@@ -2956,3 +2969,5 @@ snapshots:
       yargs-parser: 21.1.1
 
   yocto-queue@0.1.0: {}
+
+  zod@4.4.2: {}

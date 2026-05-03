@@ -1,7 +1,8 @@
 import cors from "cors";
 import express, { type Express } from "express";
 import type { Server } from "node:http";
-import { config } from "./config";
+import { config } from "./config.js";
+import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 export function createHttpApp(): Express {
   const app = express();
@@ -22,6 +23,10 @@ export function createHttpApp(): Express {
       timestamp: new Date().toISOString(),
     });
   });
+
+  // 404 for unmatched routes, then global error handler
+  app.use(notFoundHandler);
+  app.use(globalErrorHandler);
 
   return app;
 }

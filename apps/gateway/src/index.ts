@@ -1,6 +1,6 @@
 import "dotenv/config";
 import type { Server } from "node:http";
-import { createHttpApp, shutdownHttpServer, startHttpServer } from "./server";
+import { createHttpApp, shutdownHttpServer, startHttpServer } from "./server.js";
 
 async function main(): Promise<void> {
 	const app = createHttpApp();
