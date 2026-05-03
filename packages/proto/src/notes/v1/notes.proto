@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package notes.v1;
+
+service NotesService {
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse);
+  rpc GetNotes(GetNotesRequest) returns (GetNotesResponse);
+  rpc GetNote(GetNoteRequest) returns (GetNoteResponse);
+  rpc UpdateNote(UpdateNoteRequest) returns (UpdateNoteResponse);
+  rpc DeleteNote(DeleteNoteRequest) returns (DeleteNoteResponse);
+}
+
+enum NoteContentType {
+  NOTE_CONTENT_TYPE_UNSPECIFIED = 0;
+  NOTE_CONTENT_TYPE_TEXT = 1;
+  NOTE_CONTENT_TYPE_LIST = 2;
+}
+
+message CreateNoteRequest {
+  string title = 1;
+  string content = 2;
+  NoteContentType content_type = 3;
+}
+
+message CreateNoteResponse {
+  Note note = 1;
+}
+
+message GetNotesRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string sort_by = 3;
+  string sort_order = 4;
+}
+
+message GetNotesResponse {
+  repeated Note notes = 1;
+  PaginationMetadata pagination = 2;
+}
+
+message GetNoteRequest {
+  string note_id = 1;
+}
+
+message GetNoteResponse {
+  Note note = 1;
+}
+
+message UpdateNoteRequest {
+  string note_id = 1;
+  string title = 2;
+  string content = 3;
+  NoteContentType content_type = 4;
+}
+
+message UpdateNoteResponse {
+  Note note = 1;
+}
+
+message DeleteNoteRequest {
+  string note_id = 1;
+}
+
+message DeleteNoteResponse {}
+
+message Note {
+  string id = 1;
+  string user_id = 2;
+  string title = 3;
+  string content = 4;
+  NoteContentType content_type = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message PaginationMetadata {
+  int32 total = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int32 total_pages = 4;
+}

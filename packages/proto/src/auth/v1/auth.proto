@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package auth.v1;
+
+service AuthService {
+  rpc Signup(SignupRequest) returns (SignupResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc GetPublicKey(GetPublicKeyRequest) returns (GetPublicKeyResponse);
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+  rpc LogoutSession(LogoutSessionRequest) returns (LogoutSessionResponse);
+}
+
+message SignupRequest {
+  string email = 1;
+  string password = 2;
+  string device_name = 3;
+}
+
+message SignupResponse {
+  AuthTokens tokens = 1;
+  UserInfo user = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+  string device_name = 3;
+}
+
+message LoginResponse {
+  AuthTokens tokens = 1;
+  UserInfo user = 2;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  AuthTokens tokens = 1;
+  UserInfo user = 2;
+}
+
+message AuthTokens {
+  string access_token = 1;
+  string refresh_token = 2;
+}
+
+message UserInfo {
+  string user_id = 1;
+  string email = 2;
+}
+
+message GetPublicKeyRequest {}
+
+message GetPublicKeyResponse {
+  string public_key = 1;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message SessionInfo {
+  string session_id = 1;
+  string device_name = 2;
+  string created_at = 3;
+  string last_activity_at = 4;
+  bool is_current = 5;
+}
+
+message LogoutSessionRequest {
+  string session_id = 1;
+}
+
+message LogoutSessionResponse {}
