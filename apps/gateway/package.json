@@ -5,13 +5,17 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "predev": "pnpm --filter @notes/shared-types run build && pnpm --filter @notes/grpc-clients run build",
     "dev": "tsx watch src/index.ts",
+    "prebuild": "pnpm --filter @notes/shared-types run build && pnpm --filter @notes/grpc-clients run build",
     "build": "tsc -p tsconfig.json",
+    "pretypecheck": "pnpm --filter @notes/shared-types run build && pnpm --filter @notes/grpc-clients run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@notes/grpc-clients": "workspace:*",
     "@notes/shared-types": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
