@@ -134,7 +134,7 @@ async function buildAuthResponse(userId: string, email: string, deviceName: stri
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = await bcrypt.hash(refreshToken, BCRYPT_COST);
 
-  await prisma.session.create({
+  const session = await prisma.session.create({
     data: {
       userId,
       refreshTokenHash,
@@ -145,7 +145,7 @@ async function buildAuthResponse(userId: string, email: string, deviceName: stri
 
   return {
     tokens: {
-      accessToken: signAccessToken(userId),
+      accessToken: signAccessToken(userId, session.id),
       refreshToken,
     },
     user: {

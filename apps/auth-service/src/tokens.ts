@@ -12,11 +12,11 @@ const jwtSignOptions: jwt.SignOptions = {
   expiresIn: config.jwtAccessTtl as JwtExpiresIn,
 };
 
-export function signAccessToken(userId: string): string {
+export function signAccessToken(userId: string, sessionId: string): string {
   const keyPair = getSigningKeyPair();
 
   return jwt.sign(
-    {},
+    { sid: sessionId },
     keyPair.privateKeyPem,
     {
       ...jwtSignOptions,
