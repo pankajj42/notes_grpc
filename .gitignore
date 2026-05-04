@@ -15,6 +15,7 @@ build/
 
 # Prisma
 **/prisma/migrations/*.sql
+apps/auth-service/src/generated/prisma/
 
 # OS
 .DS_Store

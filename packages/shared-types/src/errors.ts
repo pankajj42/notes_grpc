@@ -18,6 +18,7 @@ export const ErrorCodes = {
   FAILED_PRECONDITION: "FAILED_PRECONDITION",
   ABORTED: "ABORTED",
   OUT_OF_RANGE: "OUT_OF_RANGE",
+  UNIMPLEMENTED: "UNIMPLEMENTED",
 
   // Server errors (5xx)
   INTERNAL: "INTERNAL",
@@ -43,6 +44,7 @@ export const ErrorCodeToGrpcStatus: Record<ErrorCode, number> = {
   FAILED_PRECONDITION: 9,
   ABORTED: 10,
   OUT_OF_RANGE: 11,
+  UNIMPLEMENTED: 12,
   INTERNAL: 13,
   UNAVAILABLE: 14,
   DATA_LOSS: 15,
@@ -64,6 +66,7 @@ export const ErrorCodeToHttpStatus: Record<ErrorCode, number> = {
   FAILED_PRECONDITION: 400,
   ABORTED: 409,
   OUT_OF_RANGE: 400,
+  UNIMPLEMENTED: 501,
   INTERNAL: 500,
   UNAVAILABLE: 503,
   DATA_LOSS: 500,
@@ -85,6 +88,7 @@ export const ErrorMessages: Record<ErrorCode, string> = {
   FAILED_PRECONDITION: "Operation failed due to invalid state.",
   ABORTED: "Operation was aborted.",
   OUT_OF_RANGE: "The provided value is out of range.",
+  UNIMPLEMENTED: "This capability is not implemented yet.",
   INTERNAL: "An internal server error occurred. Please try again.",
   UNAVAILABLE: "Service is temporarily unavailable. Please try again later.",
   DATA_LOSS: "A data loss condition occurred.",

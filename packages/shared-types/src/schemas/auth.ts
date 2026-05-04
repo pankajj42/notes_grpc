@@ -51,6 +51,8 @@ export const LogoutSessionRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });
 
+export const EmptyRequestSchema = z.object({});
+
 // ---------------------------------------------------------------------------
 // Inferred types (shared with frontend)
 // ---------------------------------------------------------------------------
@@ -59,6 +61,7 @@ export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 export type LogoutSessionRequest = z.infer<typeof LogoutSessionRequestSchema>;
+export type EmptyRequest = z.infer<typeof EmptyRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Response schemas (mirroring proto contracts)
