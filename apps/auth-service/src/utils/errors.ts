@@ -1,4 +1,4 @@
-import { type ErrorCode, ErrorCodeToGrpcStatus, ErrorCodes } from "@notes/shared-types";
+import { type ErrorCode, ErrorCodeToGrpcStatus } from "@notes/shared-types";
 import * as grpc from "@grpc/grpc-js";
 
 export function toGrpcError(code: ErrorCode, message: string): grpc.ServiceError {
