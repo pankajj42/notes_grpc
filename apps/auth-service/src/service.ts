@@ -92,7 +92,13 @@ async function handleSignup(
       },
     });
 
-    const response = await buildAuthResponse(user.id, user.email, parsed.data.deviceName);
+    const response = await buildAuthResponse(
+      user.id,
+      user.email,
+      parsed.data.deviceName,
+      extractOptionalMetadata(call, "x-user-agent", 512),
+      extractOptionalMetadata(call, "x-client-ip", 64),
+    );
     callback(null, response);
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
@@ -123,14 +129,26 @@ async function handleLogin(
       return;
     }
 
-    const response = await buildAuthResponse(user.id, user.email, parsed.data.deviceName);
+    const response = await buildAuthResponse(
+      user.id,
+      user.email,
+      parsed.data.deviceName,
+      extractOptionalMetadata(call, "x-user-agent", 512),
+      extractOptionalMetadata(call, "x-client-ip", 64),
+    );
     callback(null, response);
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
   }
 }
 
-async function buildAuthResponse(userId: string, email: string, deviceName: string): Promise<SignupResponse> {
+async function buildAuthResponse(
+  userId: string,
+  email: string,
+  deviceName: string,
+  userAgent?: string,
+  ipAddress?: string,
+): Promise<SignupResponse> {
   const refreshToken = generateRefreshToken();
   const refreshTokenHash = await bcrypt.hash(refreshToken, BCRYPT_COST);
 
@@ -139,6 +157,8 @@ async function buildAuthResponse(userId: string, email: string, deviceName: stri
       userId,
       refreshTokenHash,
       deviceName,
+      userAgent: userAgent ?? null,
+      ipAddress: ipAddress ?? null,
       expiresAt: getRefreshTokenExpiryDate(),
     },
   });
@@ -177,4 +197,22 @@ function firstIssue(error: { issues: Array<{ message: string }> }): string {
 
 function getRefreshTokenExpiryDate(): Date {
   return new Date(Date.now() + config.jwtRefreshTtlDays * 24 * 60 * 60 * 1000);
+}
+
+function extractOptionalMetadata(
+  call: grpc.ServerUnaryCall<unknown, unknown>,
+  key: string,
+  maxLength: number,
+): string | undefined {
+  const value = call.metadata.get(key)[0];
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  if (normalized === "") {
+    return undefined;
+  }
+
+  return normalized.slice(0, maxLength);
 }

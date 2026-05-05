@@ -5,6 +5,7 @@ export interface GatewayConfig {
   authServiceUrl: string;
   notesServiceUrl: string;
   corsOrigin: string;
+  jwtRefreshTtlDays: number;
   cookieSecure: boolean;
   cookieSameSite: "strict" | "lax" | "none";
   cookieDomain?: string;
@@ -85,6 +86,7 @@ export function loadConfig(): GatewayConfig {
     authServiceUrl: readRequiredString("AUTH_SERVICE_URL"),
     notesServiceUrl: readRequiredString("NOTES_SERVICE_URL"),
     corsOrigin: readRequiredString("CORS_ORIGIN"),
+    jwtRefreshTtlDays: readPositiveInt("JWT_REFRESH_TTL_DAYS", 30),
     cookieSecure: readCookieSecure(),
     cookieSameSite: readCookieSameSite(),
     ...(typeof cookieDomain === "string" && cookieDomain.trim() !== ""

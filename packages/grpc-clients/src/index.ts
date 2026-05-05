@@ -4,14 +4,28 @@ import fs from "node:fs";
 import path from "node:path";
 
 export interface AuthServiceClient {
-	Signup: grpc.ClientUnaryCall & ((
-		request: unknown,
-		callback: (error: grpc.ServiceError | null, response: unknown) => void,
-	) => grpc.ClientUnaryCall);
-	Login: grpc.ClientUnaryCall & ((
-		request: unknown,
-		callback: (error: grpc.ServiceError | null, response: unknown) => void,
-	) => grpc.ClientUnaryCall);
+	Signup: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
+	Login: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
 	GetPublicKey: grpc.ClientUnaryCall & ((
 		request: unknown,
 		callback: (error: grpc.ServiceError | null, response: unknown) => void,
