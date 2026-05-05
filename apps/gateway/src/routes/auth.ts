@@ -1,7 +1,13 @@
+import * as grpc from "@grpc/grpc-js";
+import { rateLimit } from "express-rate-limit";
+import { Router, type Request } from "express";
+import { z } from "zod";
 import { createAuthServiceClient } from "@notes/grpc-clients";
 import {
-  ErrorCodeToHttpStatus,
   ErrorCodes,
+  LoginRequestSchema,
+  SignupRequestSchema,
+  sessionIdSchema,
   successResponse,
   type EmptyRequest,
   type ListSessionsResponse,
@@ -17,17 +23,15 @@ import {
   type SignupRequest,
   type SignupResponse,
 } from "@notes/shared-types";
-import * as grpc from "@grpc/grpc-js";
-import { rateLimit } from "express-rate-limit";
-import { Router, type Request } from "express";
-import type { CookieOptions, Response } from "express";
 import { config } from "../config.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
-import { loginBodySchema, sessionIdParamsSchema, signupBodySchema } from "../validation/auth.js";
+import { grpcUnaryCall, toAppError } from "../lib/grpc.js";
+import { REFRESH_COOKIE_NAME, clearRefreshTokenCookie, setRefreshTokenCookie } from "../lib/cookies.js";
 
-const REFRESH_COOKIE_NAME = "refreshToken";
+// URL param schema for session ID — gateway-specific (`:id` path param)
+const sessionIdParamsSchema = z.object({ id: sessionIdSchema });
 
 // 10 refresh calls per minute per session (keyed by sessionId embedded in the cookie)
 const refreshRateLimiter = rateLimit({
@@ -48,22 +52,20 @@ const refreshRateLimiter = rateLimit({
   },
 });
 
+type AuthServiceClient = ReturnType<typeof createAuthServiceClient>;
+
 type HttpAuthPayload = {
-  tokens: {
-    accessToken: string;
-  };
+  tokens: { accessToken: string };
   user: SignupResponse["user"];
 };
 
 export function createAuthRouter(): Router {
   const router = Router();
 
-  router.post("/signup", validate(signupBodySchema), async (req, res, next) => {
+  router.post("/signup", validate(SignupRequestSchema), async (req, res, next) => {
     try {
-      const response = await unaryCall<SignupRequest, SignupResponse>(
-        "Signup",
-        res.locals.validated.body as SignupRequest,
-        createRequestMetadata(req),
+      const response = await callAuth<SignupResponse>((c, cb) =>
+        c.Signup(res.locals.validated.body as SignupRequest, createRequestMetadata(req), cb),
       );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(201).json(successResponse(toHttpAuthPayload(response)));
@@ -72,12 +74,10 @@ export function createAuthRouter(): Router {
     }
   });
 
-  router.post("/login", validate(loginBodySchema), async (req, res, next) => {
+  router.post("/login", validate(LoginRequestSchema), async (req, res, next) => {
     try {
-      const response = await unaryCall<LoginRequest, LoginResponse>(
-        "Login",
-        res.locals.validated.body as LoginRequest,
-        createRequestMetadata(req),
+      const response = await callAuth<LoginResponse>((c, cb) =>
+        c.Login(res.locals.validated.body as LoginRequest, createRequestMetadata(req), cb),
       );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(200).json(successResponse(toHttpAuthPayload(response)));
@@ -88,7 +88,9 @@ export function createAuthRouter(): Router {
 
   router.get("/public-key", async (_req, res, next) => {
     try {
-      const response = await unaryCall<EmptyRequest, PublicKeyResponse>("GetPublicKey", {});
+      const response = await callAuth<PublicKeyResponse>((c, cb) =>
+        c.GetPublicKey({} as EmptyRequest, cb),
+      );
       res.status(200).json(successResponse(response));
     } catch (error: unknown) {
       next(toAppError(error));
@@ -102,8 +104,9 @@ export function createAuthRouter(): Router {
         next(new AppError(ErrorCodes.UNAUTHENTICATED, "Missing refresh token"));
         return;
       }
-
-      const response = await unaryCall<RefreshTokenRequest, RefreshTokenResponse>("RefreshToken", { refreshToken });
+      const response = await callAuth<RefreshTokenResponse>((c, cb) =>
+        c.RefreshToken({ refreshToken } as RefreshTokenRequest, cb),
+      );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(200).json(successResponse(toHttpAuthPayload(response)));
     } catch (error: unknown) {
@@ -115,7 +118,9 @@ export function createAuthRouter(): Router {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
       const metadata = createSessionMetadata(userId, sessionId);
-      const response = await unaryCall<EmptyRequest, ListSessionsResponse>("ListSessions", {}, metadata);
+      const response = await callAuth<ListSessionsResponse>((c, cb) =>
+        c.ListSessions({} as EmptyRequest, metadata, cb),
+      );
       res.status(200).json(successResponse(response));
     } catch (error: unknown) {
       next(toAppError(error));
@@ -126,10 +131,8 @@ export function createAuthRouter(): Router {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
       const metadata = createSessionMetadata(userId, sessionId);
-      await unaryCall<LogoutSessionRequest, LogoutSessionResponse>(
-        "LogoutSession",
-        { sessionId },
-        metadata,
+      await callAuth<LogoutSessionResponse>((c, cb) =>
+        c.LogoutSession({ sessionId } as LogoutSessionRequest, metadata, cb),
       );
       clearRefreshTokenCookie(res);
       res.status(200).json(successResponse({}));
@@ -143,10 +146,8 @@ export function createAuthRouter(): Router {
       const { userId, sessionId: currentSessionId } = getAuthenticatedUser(req.user);
       const targetSessionId = (res.locals.validated.params as { id: string }).id;
       const metadata = createSessionMetadata(userId, currentSessionId);
-      await unaryCall<LogoutSessionRequest, LogoutSessionResponse>(
-        "LogoutSession",
-        { sessionId: targetSessionId },
-        metadata,
+      await callAuth<LogoutSessionResponse>((c, cb) =>
+        c.LogoutSession({ sessionId: targetSessionId } as LogoutSessionRequest, metadata, cb),
       );
       res.status(200).json(successResponse({}));
     } catch (error: unknown) {
@@ -158,7 +159,9 @@ export function createAuthRouter(): Router {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
       const metadata = createSessionMetadata(userId, sessionId);
-      await unaryCall<LogoutAllSessionsRequest, LogoutAllSessionsResponse>("LogoutAllSessions", {}, metadata);
+      await callAuth<LogoutAllSessionsResponse>((c, cb) =>
+        c.LogoutAllSessions({} as LogoutAllSessionsRequest, metadata, cb),
+      );
       clearRefreshTokenCookie(res);
       res.status(200).json(successResponse({}));
     } catch (error: unknown) {
@@ -169,111 +172,38 @@ export function createAuthRouter(): Router {
   return router;
 }
 
-async function unaryCall<TRequest extends object, TResponse>(
-  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken" | "ListSessions" | "LogoutSession" | "LogoutAllSessions",
-  request: TRequest,
-  metadata?: grpc.Metadata,
+function callAuth<TResponse>(
+  fn: (client: AuthServiceClient, cb: (error: grpc.ServiceError | null, response: unknown) => void) => void,
 ): Promise<TResponse> {
   const client = createAuthServiceClient(config.authServiceUrl);
-
-  try {
-    return await new Promise<TResponse>((resolve, reject) => {
-      const callback = (error: grpc.ServiceError | null, response: TResponse): void => {
-        if (error != null) {
-          reject(error);
-          return;
-        }
-
-        resolve(response);
-      };
-
-      switch (method) {
-        case "Signup":
-          client.Signup(
-            request,
-            metadata ?? new grpc.Metadata(),
-            callback as (error: grpc.ServiceError | null, response: unknown) => void,
-          );
-          return;
-        case "Login":
-          client.Login(
-            request,
-            metadata ?? new grpc.Metadata(),
-            callback as (error: grpc.ServiceError | null, response: unknown) => void,
-          );
-          return;
-        case "GetPublicKey":
-          client.GetPublicKey(request, callback as (error: grpc.ServiceError | null, response: unknown) => void);
-          return;
-        case "RefreshToken":
-          client.RefreshToken(request, callback as (error: grpc.ServiceError | null, response: unknown) => void);
-          return;
-        case "ListSessions":
-          client.ListSessions(
-            request,
-            metadata ?? new grpc.Metadata(),
-            callback as (error: grpc.ServiceError | null, response: unknown) => void,
-          );
-          return;
-        case "LogoutSession":
-          client.LogoutSession(
-            request,
-            metadata ?? new grpc.Metadata(),
-            callback as (error: grpc.ServiceError | null, response: unknown) => void,
-          );
-          return;
-        case "LogoutAllSessions":
-          client.LogoutAllSessions(
-            request,
-            metadata ?? new grpc.Metadata(),
-            callback as (error: grpc.ServiceError | null, response: unknown) => void,
-          );
-          return;
-      }
-    });
-  } finally {
-    client.close();
-  }
+  return grpcUnaryCall<TResponse>((cb) => fn(client, cb), () => client.close());
 }
 
-function toAppError(error: unknown): AppError {
-  if (isGrpcServiceError(error)) {
-    const code = grpcStatusToErrorCode(error.code);
-    return new AppError(code, error.details || error.message);
-  }
-
-  if (error instanceof AppError) {
-    return error;
-  }
-
-  if (error instanceof Error) {
-    return new AppError(ErrorCodes.INTERNAL, error.message);
-  }
-
-  return new AppError(ErrorCodes.INTERNAL);
+function toHttpAuthPayload(response: SignupResponse | LoginResponse): HttpAuthPayload {
+  return {
+    tokens: { accessToken: response.tokens.accessToken },
+    user: response.user,
+  };
 }
 
-function isGrpcServiceError(error: unknown): error is grpc.ServiceError {
-  return error instanceof Error && "code" in error;
-}
+function createRequestMetadata(req: Request): grpc.Metadata {
+  const metadata = new grpc.Metadata();
 
-function grpcStatusToErrorCode(statusCode: number): keyof typeof ErrorCodeToHttpStatus {
-  switch (statusCode) {
-    case 3:
-      return ErrorCodes.INVALID_ARGUMENT;
-    case 5:
-      return ErrorCodes.NOT_FOUND;
-    case 6:
-      return ErrorCodes.ALREADY_EXISTS;
-    case 7:
-      return ErrorCodes.PERMISSION_DENIED;
-    case 12:
-      return ErrorCodes.UNIMPLEMENTED;
-    case 16:
-      return ErrorCodes.UNAUTHENTICATED;
-    default:
-      return ErrorCodes.INTERNAL;
+  const userAgent = req.get("user-agent");
+  if (typeof userAgent === "string" && userAgent.trim() !== "") {
+    metadata.set("x-user-agent", userAgent.trim());
   }
+
+  const forwardedFor = req.get("x-forwarded-for");
+  const candidateIp =
+    typeof forwardedFor === "string" && forwardedFor.trim() !== ""
+      ? forwardedFor.split(",")[0]?.trim()
+      : req.ip;
+  if (typeof candidateIp === "string" && candidateIp.trim() !== "") {
+    metadata.set("x-client-ip", candidateIp.trim());
+  }
+
+  return metadata;
 }
 
 function createSessionMetadata(userId: string, sessionId: string): grpc.Metadata {
@@ -291,63 +221,4 @@ function getAuthenticatedUser(user: Express.Request["user"]): { userId: string; 
     throw new AppError(ErrorCodes.UNAUTHENTICATED);
   }
   return { userId: user.userId, sessionId: user.sessionId };
-}
-
-function createRequestMetadata(req: Request): grpc.Metadata {
-  const metadata = new grpc.Metadata();
-  const userAgent = req.get("user-agent");
-  if (typeof userAgent === "string" && userAgent.trim() !== "") {
-    metadata.set("x-user-agent", userAgent.trim());
-  }
-
-  const forwardedFor = req.get("x-forwarded-for");
-  const candidateIp = typeof forwardedFor === "string" && forwardedFor.trim() !== ""
-    ? forwardedFor.split(",")[0]?.trim()
-    : req.ip;
-
-  if (typeof candidateIp === "string" && candidateIp.trim() !== "") {
-    metadata.set("x-client-ip", candidateIp.trim());
-  }
-
-  return metadata;
-}
-
-function clearRefreshTokenCookie(res: Response): void {
-  res.clearCookie(REFRESH_COOKIE_NAME, {
-    path: "/auth",
-    httpOnly: true,
-    secure: config.cookieSecure,
-    sameSite: config.cookieSameSite,
-    ...(typeof config.cookieDomain === "string" && config.cookieDomain.trim() !== ""
-      ? { domain: config.cookieDomain }
-      : {}),
-  });
-}
-
-function setRefreshTokenCookie(
-  res: { cookie: (name: string, value: string, options: CookieOptions) => void },
-  refreshToken: string,
-): void {
-  const options: CookieOptions = {
-    path: "/auth",
-    httpOnly: true,
-    secure: config.cookieSecure,
-    sameSite: config.cookieSameSite,
-    maxAge: config.jwtRefreshTtlDays * 24 * 60 * 60 * 1000,
-  };
-
-  if (typeof config.cookieDomain === "string" && config.cookieDomain.trim() !== "") {
-    options.domain = config.cookieDomain;
-  }
-
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, options);
-}
-
-function toHttpAuthPayload(response: SignupResponse | LoginResponse): HttpAuthPayload {
-  return {
-    tokens: {
-      accessToken: response.tokens.accessToken,
-    },
-    user: response.user,
-  };
 }

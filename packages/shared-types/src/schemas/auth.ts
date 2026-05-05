@@ -24,7 +24,7 @@ const refreshTokenSchema = z
   .string()
   .min(1, "Refresh token is required");
 
-const sessionIdSchema = z
+export const sessionIdSchema = z
   .uuid("Session ID must be a valid UUID");
 
 // ---------------------------------------------------------------------------
