@@ -8,6 +8,10 @@
     "pnpm": ">=10.32.1"
   },
   "scripts": {
+    "clean": "pnpm -r run clean",
+    "nuke": "pnpm -r run clean && rimraf node_modules && pnpm store prune",
+    "prisma:generate": "pnpm --filter @notes/auth-service run prisma:generate && pnpm --filter @notes/notes-service run prisma:generate",
+    "prisma:migrate:dev": "pnpm --filter @notes/auth-service run prisma:migrate:dev && pnpm --filter @notes/notes-service run prisma:migrate:dev",
     "dev": "pnpm -r --parallel run dev",
     "build": "pnpm -r run build",
     "lint": "eslint .",
@@ -20,6 +24,7 @@
   "packageManager": "pnpm@10.32.1",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "rimraf": "^6.0.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
