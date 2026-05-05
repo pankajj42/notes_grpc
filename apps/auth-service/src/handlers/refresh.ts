@@ -1,5 +1,11 @@
 import * as grpc from "@grpc/grpc-js";
-import { type RefreshTokenRequest, type RefreshTokenResponse, RefreshTokenRequestSchema, ErrorCodes } from "@notes/shared-types";
+import {
+  type RefreshTokenRequest,
+  type RefreshTokenResponse,
+  RefreshTokenRequestSchema,
+  ErrorCodes,
+  parseRefreshToken,
+} from "@notes/shared-types";
 import logger from "../logger.js";
 import { signAccessToken, generateRefreshToken } from "../tokens.js";
 import { toGrpcError, firstIssue, getErrorMessage } from "../utils/errors.js";
@@ -27,13 +33,13 @@ export async function handleRefreshToken(
     }
 
     const rawToken = parsed.data.refreshToken;
-    const dotIndex = rawToken.indexOf(".");
-    if (dotIndex === -1) {
+    const parsedToken = parseRefreshToken(rawToken);
+    if (parsedToken == null) {
       callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid refresh token"));
       return;
     }
 
-    const sessionId = rawToken.slice(0, dotIndex);
+    const sessionId = parsedToken.sessionId;
     const session = await findSessionWithUser(sessionId);
 
     if (session == null || session.revokedAt != null) {

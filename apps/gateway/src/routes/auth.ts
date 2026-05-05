@@ -1,5 +1,4 @@
 import * as grpc from "@grpc/grpc-js";
-import { rateLimit } from "express-rate-limit";
 import { Router } from "express";
 import { z } from "zod";
 import { createAuthServiceClient } from "@notes/grpc-clients";
@@ -27,31 +26,13 @@ import { config } from "../config.js";
 import { createCorrelationMetadata } from "../lib/correlation.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { AppError } from "../middleware/errorHandler.js";
+import { loginRateLimiter, refreshRateLimiter, signupRateLimiter } from "../middleware/rateLimiters.js";
 import { validate } from "../middleware/validate.js";
 import { grpcUnaryCall, toAppError } from "../lib/grpc.js";
 import { REFRESH_COOKIE_NAME, clearRefreshTokenCookie, setRefreshTokenCookie } from "../lib/cookies.js";
 
 // URL param schema for session ID — gateway-specific (`:id` path param)
 const sessionIdParamsSchema = z.object({ id: sessionIdSchema });
-
-// 10 refresh calls per minute per session (keyed by sessionId embedded in the cookie)
-const refreshRateLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 10,
-  standardHeaders: "draft-8",
-  legacyHeaders: false,
-  keyGenerator: (req) => {
-    const cookie = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
-    if (typeof cookie === "string") {
-      const dotIndex = cookie.indexOf(".");
-      if (dotIndex !== -1) return cookie.slice(0, dotIndex);
-    }
-    return req.ip ?? "unknown";
-  },
-  handler: (_req, res) => {
-    res.status(429).json({ status: "error", code: "RATE_LIMITED", message: "Too many refresh attempts. Try again later." });
-  },
-});
 
 type AuthServiceClient = ReturnType<typeof createAuthServiceClient>;
 
@@ -63,7 +44,7 @@ type HttpAuthPayload = {
 export function createAuthRouter(): Router {
   const router = Router();
 
-  router.post("/signup", validate(SignupRequestSchema), async (req, res, next) => {
+  router.post("/signup", signupRateLimiter, validate(SignupRequestSchema), async (req, res, next) => {
     try {
       const response = await callAuth<SignupResponse>((c, cb) =>
         c.Signup(res.locals.validated.body as SignupRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),
@@ -75,7 +56,7 @@ export function createAuthRouter(): Router {
     }
   });
 
-  router.post("/login", validate(LoginRequestSchema), async (req, res, next) => {
+  router.post("/login", loginRateLimiter, validate(LoginRequestSchema), async (req, res, next) => {
     try {
       const response = await callAuth<LoginResponse>((c, cb) =>
         c.Login(res.locals.validated.body as LoginRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),

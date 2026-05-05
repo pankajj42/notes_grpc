@@ -50,7 +50,7 @@ Each service owns its own database — no shared DB across service boundaries.
 | Concern | Choice | Reason |
 |---|---|---|
 | Language | TypeScript 5+ | Full type safety across all services |
-| Runtime | Node.js 22 (LTS) | Active LTS, native ESM |
+| Runtime | Node.js 24 (LTS) | Active LTS, native ESM |
 | gRPC transport | `@grpc/grpc-js` | Official Node gRPC implementation |
 | Proto loading | `@grpc/proto-loader` | Dynamic proto loading at runtime |
 | HTTP framework | Express 5 (gateway only) | Minimal surface area at the edge |
@@ -101,7 +101,7 @@ notes_grpc/
 
 ## Prerequisites
 
-- **Node.js 22** — use `.nvmrc` / `nvm use`
+- **Node.js 24** — use `.nvmrc` / `nvm use`
 - **pnpm 9+** — `npm install -g pnpm`
 - **Docker Desktop** — for local Postgres instances
 
@@ -143,16 +143,21 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5432/auth_db"
 
 # gRPC
 GRPC_PORT=50051
+GRPC_TLS_ENABLED=false
+GRPC_TLS_KEY_PATH=""
+GRPC_TLS_CERT_PATH=""
 
 # JWT
 # Leave blank to auto-generate on first boot (dev only).
 # In production, supply pre-generated RSA PEM strings.
 RSA_PRIVATE_KEY=""
 RSA_PUBLIC_KEY=""
-JWT_ACCESS_EXPIRES_IN="15m"
+JWT_ISSUER="notes-auth-service"
+JWT_AUDIENCE="notes-api-gateway"
+JWT_ACCESS_TTL="15m"
 
 # Refresh tokens
-REFRESH_TOKEN_EXPIRES_DAYS=30
+JWT_REFRESH_TTL_DAYS=30
 ```
 
 ### `apps/notes-service/.env`
@@ -164,6 +169,9 @@ DATABASE_URL="postgresql://postgres:postgres@localhost:5433/notes_db"
 
 # gRPC
 GRPC_PORT=50052
+GRPC_TLS_ENABLED=false
+GRPC_TLS_KEY_PATH=""
+GRPC_TLS_CERT_PATH=""
 ```
 
 ### `apps/gateway/.env`
@@ -172,6 +180,13 @@ GRPC_PORT=50052
 PORT=3000
 AUTH_SERVICE_URL="localhost:50051"
 NOTES_SERVICE_URL="localhost:50052"
+
+JWT_ISSUER="notes-auth-service"
+JWT_AUDIENCE="notes-api-gateway"
+
+# gRPC client TLS (gateway -> internal services)
+GRPC_TLS_ENABLED=false
+GRPC_TLS_CA_PATH=""
 
 # Cookie
 COOKIE_SECURE=false          # true in production (requires HTTPS)
@@ -210,7 +225,7 @@ VITE_API_BASE_URL="http://localhost:3000"
 |---|---|---|---|
 | `GET` | `/notes` | Bearer | List all non-deleted notes for user |
 | `POST` | `/notes` | Bearer | Create a note (TEXT or LIST type) |
-| `PUT` | `/notes/:id` | Bearer | Update title and/or content |
+| `PUT` | `/notes/:id` | Bearer | Update title and/or content (content type is immutable) |
 | `DELETE` | `/notes/:id` | Bearer | Soft-delete a note |
 
 ---

@@ -15,7 +15,7 @@ Full phased roadmap for the Notes gRPC Microservices project.
 - Per-service `tsconfig.json` files extending base
 - ESLint flat config (`eslint.config.mjs`) with `typescript-eslint` strict rules + Prettier
 - `.prettierrc` — 2-space, trailing commas, LF
-- `.gitignore`, `.gitattributes` (LF normalisation), `.nvmrc` (Node 22)
+- `.gitignore`, `.gitattributes` (LF normalisation), `.nvmrc` (Node 24)
 - Vitest workspace config
 
 **Commit**: `chore(repo): initialize monorepo workspace skeleton with TypeScript and tooling baseline`
@@ -193,6 +193,10 @@ Note
 // LIST
 { items: Array<{ text: string; checked: boolean }> }
 ```
+
+**Design decision**
+- `NoteContentType` is immutable once a note is created.
+- `UpdateNoteRequest` intentionally updates only `title` and `content`.
 
 **Commit**: `feat(notes): implement note CRUD gRPC service with soft delete`
 

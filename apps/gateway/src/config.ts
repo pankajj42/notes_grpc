@@ -4,6 +4,8 @@ export interface GatewayConfig {
   logLevel: "debug" | "info" | "warn" | "error";
   authServiceUrl: string;
   notesServiceUrl: string;
+  jwtIssuer: string;
+  jwtAudience: string;
   corsOrigin: string;
   jwtRefreshTtlDays: number;
   cookieSecure: boolean;
@@ -85,6 +87,8 @@ export function loadConfig(): GatewayConfig {
     logLevel: readLogLevel(),
     authServiceUrl: readRequiredString("AUTH_SERVICE_URL"),
     notesServiceUrl: readRequiredString("NOTES_SERVICE_URL"),
+    jwtIssuer: readRequiredString("JWT_ISSUER"),
+    jwtAudience: readRequiredString("JWT_AUDIENCE"),
     corsOrigin: readRequiredString("CORS_ORIGIN"),
     jwtRefreshTtlDays: readPositiveInt("JWT_REFRESH_TTL_DAYS", 30),
     cookieSecure: readCookieSecure(),

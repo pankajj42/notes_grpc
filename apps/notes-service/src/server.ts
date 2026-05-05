@@ -1,4 +1,5 @@
 import * as grpc from "@grpc/grpc-js";
+import fs from "node:fs";
 import { config } from "./config";
 import logger from "./logger";
 import { createNotesHandlers } from "./service";
@@ -16,9 +17,10 @@ export function createGrpcServer(): grpc.Server {
 
 export async function startGrpcServer(server: grpc.Server): Promise<void> {
   const address = `0.0.0.0:${String(config.grpcPort)}`;
+  const credentials = createServerCredentials();
 
   await new Promise<void>((resolve, reject) => {
-    server.bindAsync(address, grpc.ServerCredentials.createInsecure(), (error) => {
+    server.bindAsync(address, credentials, (error) => {
       if (error != null) {
         reject(error);
         return;
@@ -43,4 +45,25 @@ export async function shutdownGrpcServer(server: grpc.Server): Promise<void> {
       resolve();
     });
   });
+}
+
+function createServerCredentials(): grpc.ServerCredentials {
+  if (!config.grpcTlsEnabled) {
+    return grpc.ServerCredentials.createInsecure();
+  }
+
+  if (config.grpcTlsKeyPath == null || config.grpcTlsCertPath == null) {
+    logger.warn(
+      { event: "lifecycle", type: "grpc_tls_fallback_insecure" },
+      "GRPC TLS enabled but certificate paths are missing; falling back to insecure credentials",
+    );
+    return grpc.ServerCredentials.createInsecure();
+  }
+
+  return grpc.ServerCredentials.createSsl(null, [
+    {
+      cert_chain: fs.readFileSync(config.grpcTlsCertPath),
+      private_key: fs.readFileSync(config.grpcTlsKeyPath),
+    },
+  ]);
 }

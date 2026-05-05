@@ -1,5 +1,11 @@
 import * as grpc from "@grpc/grpc-js";
-import { type LoginRequest, type LoginResponse, LoginRequestSchema, ErrorCodes } from "@notes/shared-types";
+import {
+  type LoginRequest,
+  type LoginResponse,
+  LoginRequestSchema,
+  ErrorCodes,
+  parseRefreshToken,
+} from "@notes/shared-types";
 import logger from "../logger.js";
 import { toGrpcError, firstIssue, getErrorMessage } from "../utils/errors.js";
 import { extractCorrelationFields } from "../utils/metadata.js";
@@ -40,7 +46,7 @@ export async function handleLogin(
       correlation.userAgent,
       ipAddress,
     );
-    const sessionId = response.tokens.refreshToken.split(".")[0];
+    const sessionId = parseRefreshToken(response.tokens.refreshToken)?.sessionId;
     logger.info({ ...correlation, event: "auth", type: "login", userId: user.id, sessionId, ipAddress }, "User logged in");
     callback(null, response);
   } catch (error: unknown) {

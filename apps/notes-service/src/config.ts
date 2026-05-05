@@ -1,6 +1,9 @@
 export interface NotesServiceConfig {
   nodeEnv: "development" | "production" | "test";
   grpcPort: number;
+  grpcTlsEnabled: boolean;
+  grpcTlsKeyPath?: string;
+  grpcTlsCertPath?: string;
   logLevel: "debug" | "info" | "warn" | "error";
   databaseUrl: string;
   directUrl: string;
@@ -44,6 +47,22 @@ function readNodeEnv(): NotesServiceConfig["nodeEnv"] {
   throw new Error("NODE_ENV must be one of: development, production, test");
 }
 
+function readBoolean(name: string, fallback: boolean): boolean {
+  const raw = process.env[name];
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return fallback;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+  throw new Error(`${name} must be true or false`);
+}
+
 function readLogLevel(): NotesServiceConfig["logLevel"] {
   const value = readOptionalString("LOG_LEVEL", "info");
   if (value === "debug" || value === "info" || value === "warn" || value === "error") {
@@ -53,9 +72,17 @@ function readLogLevel(): NotesServiceConfig["logLevel"] {
 }
 
 export function loadConfig(): NotesServiceConfig {
+  const nodeEnv = readNodeEnv();
+
+  const grpcTlsKeyPath = process.env.GRPC_TLS_KEY_PATH;
+  const grpcTlsCertPath = process.env.GRPC_TLS_CERT_PATH;
+
   return {
-    nodeEnv: readNodeEnv(),
+    nodeEnv,
     grpcPort: readPositiveInt("GRPC_PORT", 50052),
+    grpcTlsEnabled: readBoolean("GRPC_TLS_ENABLED", false),
+    ...(typeof grpcTlsKeyPath === "string" && grpcTlsKeyPath.trim() !== "" ? { grpcTlsKeyPath } : {}),
+    ...(typeof grpcTlsCertPath === "string" && grpcTlsCertPath.trim() !== "" ? { grpcTlsCertPath } : {}),
     logLevel: readLogLevel(),
     databaseUrl: readRequiredString("DATABASE_URL"),
     directUrl: readRequiredString("DIRECT_URL"),

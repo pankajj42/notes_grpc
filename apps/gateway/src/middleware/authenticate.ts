@@ -45,6 +45,8 @@ async function verifyWithCachedKey(token: string): Promise<DecodedAccessToken> {
 function verifyToken(token: string, publicKeyPem: string): DecodedAccessToken {
   const decoded = jwt.verify(token, publicKeyPem, {
     algorithms: ["RS256"],
+    issuer: config.jwtIssuer,
+    audience: config.jwtAudience,
   });
 
   if (typeof decoded === "string") {

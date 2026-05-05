@@ -23,7 +23,7 @@ export function createHttpApp(): Express {
   app.use(attachRequestContext);
   app.use(requestLoggingMiddleware);
 
-  app.use(express.json({ limit: "1mb" }));
+  app.use(express.json({ limit: "200kb" }));
   app.use(cookieParser());
 
   app.use("/auth", createAuthRouter());

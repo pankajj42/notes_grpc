@@ -1,5 +1,11 @@
 import * as grpc from "@grpc/grpc-js";
-import { type SignupRequest, type SignupResponse, SignupRequestSchema, ErrorCodes } from "@notes/shared-types";
+import {
+  type SignupRequest,
+  type SignupResponse,
+  SignupRequestSchema,
+  ErrorCodes,
+  parseRefreshToken,
+} from "@notes/shared-types";
 import logger from "../logger.js";
 import { toGrpcError, firstIssue, getErrorMessage } from "../utils/errors.js";
 import { extractCorrelationFields } from "../utils/metadata.js";
@@ -36,7 +42,7 @@ export async function handleSignup(
       correlation.userAgent,
       ipAddress,
     );
-    const sessionId = response.tokens.refreshToken.split(".")[0];
+    const sessionId = parseRefreshToken(response.tokens.refreshToken)?.sessionId;
     logger.info({ ...correlation, event: "auth", type: "signup", userId: user.id, sessionId, ipAddress }, "User signed up");
     callback(null, response);
   } catch (error: unknown) {

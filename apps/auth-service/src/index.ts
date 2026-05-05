@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { createGrpcServer, shutdownGrpcServer, startGrpcServer } from "./server";
+import { prisma } from "./prisma";
 
 async function main(): Promise<void> {
 	const server = createGrpcServer();
@@ -9,6 +10,7 @@ async function main(): Promise<void> {
 		console.log("[auth-service] shutting down...");
 		try {
 			await shutdownGrpcServer(server);
+			await prisma.$disconnect();
 			process.exitCode = 0;
 		} catch (error: unknown) {
 			console.error("[auth-service] shutdown failed", error);

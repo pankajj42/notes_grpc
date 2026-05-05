@@ -50,7 +50,6 @@ message UpdateNoteRequest {
   string note_id = 1;
   string title = 2;
   string content = 3;
-  NoteContentType content_type = 4;
 }
 
 message UpdateNoteResponse {

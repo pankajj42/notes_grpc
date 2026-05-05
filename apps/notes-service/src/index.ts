@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createGrpcServer, shutdownGrpcServer, startGrpcServer } from "./server";
 import logger from "./logger";
+import { prisma } from "./prisma";
 
 async function main(): Promise<void> {
 	const server = createGrpcServer();
@@ -10,6 +11,7 @@ async function main(): Promise<void> {
 		logger.info({ event: "lifecycle", type: "shutdown_start" }, "notes-service shutting down");
 		try {
 			await shutdownGrpcServer(server);
+			await prisma.$disconnect();
 			logger.info({ event: "lifecycle", type: "shutdown_complete" }, "notes-service shutdown complete");
 			process.exitCode = 0;
 		} catch (error: unknown) {
