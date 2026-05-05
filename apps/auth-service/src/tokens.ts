@@ -25,6 +25,6 @@ export function signAccessToken(userId: string, sessionId: string): string {
   );
 }
 
-export function generateRefreshToken(): string {
-  return randomBytes(48).toString("base64url");
+export function generateRefreshToken(sessionId: string): string {
+  return `${sessionId}.${randomBytes(48).toString("base64url")}`;
 }

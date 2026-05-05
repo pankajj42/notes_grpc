@@ -7,6 +7,8 @@ import {
   type LoginRequest,
   type LoginResponse,
   type PublicKeyResponse,
+  type RefreshTokenRequest,
+  type RefreshTokenResponse,
   type SignupRequest,
   type SignupResponse,
 } from "@notes/shared-types";
@@ -67,11 +69,27 @@ export function createAuthRouter(): Router {
     }
   });
 
+  router.post("/refresh", async (req, res, next) => {
+    try {
+      const refreshToken = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
+      if (typeof refreshToken !== "string" || refreshToken.trim() === "") {
+        next(new AppError(ErrorCodes.UNAUTHENTICATED, "Missing refresh token"));
+        return;
+      }
+
+      const response = await unaryCall<RefreshTokenRequest, RefreshTokenResponse>("RefreshToken", { refreshToken });
+      setRefreshTokenCookie(res, response.tokens.refreshToken);
+      res.status(200).json(successResponse(toHttpAuthPayload(response)));
+    } catch (error: unknown) {
+      next(toAppError(error));
+    }
+  });
+
   return router;
 }
 
 async function unaryCall<TRequest extends object, TResponse>(
-  method: "Signup" | "Login" | "GetPublicKey",
+  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken",
   request: TRequest,
   metadata?: grpc.Metadata,
 ): Promise<TResponse> {
@@ -105,6 +123,9 @@ async function unaryCall<TRequest extends object, TResponse>(
           return;
         case "GetPublicKey":
           client.GetPublicKey(request, callback as (error: grpc.ServiceError | null, response: unknown) => void);
+          return;
+        case "RefreshToken":
+          client.RefreshToken(request, callback as (error: grpc.ServiceError | null, response: unknown) => void);
           return;
       }
     });

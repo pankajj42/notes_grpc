@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import * as grpc from "@grpc/grpc-js";
 import bcrypt from "bcrypt";
 import {
@@ -13,6 +14,7 @@ import {
   type PublicKeyResponse,
   type RefreshTokenRequest,
   type RefreshTokenResponse,
+  RefreshTokenRequestSchema,
   type SignupRequest,
   type SignupResponse,
   SignupRequestSchema,
@@ -46,10 +48,10 @@ export function createAuthHandlers(): grpc.UntypedServiceImplementation {
       }
     },
     RefreshToken: (
-      _call: grpc.ServerUnaryCall<RefreshTokenRequest, RefreshTokenResponse>,
+      call: grpc.ServerUnaryCall<RefreshTokenRequest, RefreshTokenResponse>,
       callback: UnaryCallback<RefreshTokenResponse>,
     ) => {
-      callback(toGrpcError(ErrorCodes.UNIMPLEMENTED, "RefreshToken will be implemented in a later phase"));
+      void handleRefreshToken(call, callback);
     },
     ListSessions: (
       _call: grpc.ServerUnaryCall<EmptyRequest, ListSessionsResponse>,
@@ -142,6 +144,67 @@ async function handleLogin(
   }
 }
 
+async function handleRefreshToken(
+  call: grpc.ServerUnaryCall<RefreshTokenRequest, RefreshTokenResponse>,
+  callback: UnaryCallback<RefreshTokenResponse>,
+): Promise<void> {
+  try {
+    const parsed = RefreshTokenRequestSchema.safeParse(call.request);
+    if (!parsed.success) {
+      callback(toGrpcError(ErrorCodes.INVALID_ARGUMENT, firstIssue(parsed.error)));
+      return;
+    }
+
+    const rawToken = parsed.data.refreshToken;
+    const dotIndex = rawToken.indexOf(".");
+    if (dotIndex === -1) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid refresh token"));
+      return;
+    }
+
+    const sessionId = rawToken.slice(0, dotIndex);
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { user: true },
+    });
+
+    if (session == null || session.revokedAt != null) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid or expired refresh token"));
+      return;
+    }
+
+    if (session.expiresAt < new Date()) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Refresh token has expired"));
+      return;
+    }
+
+    const tokenMatches = await bcrypt.compare(rawToken, session.refreshTokenHash);
+    if (!tokenMatches) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid refresh token"));
+      return;
+    }
+
+    await prisma.session.update({
+      where: { id: sessionId },
+      data: { lastUsedAt: new Date() },
+    });
+
+    callback(null, {
+      tokens: {
+        accessToken: signAccessToken(session.userId, sessionId),
+        refreshToken: rawToken,
+      },
+      user: {
+        userId: session.userId,
+        email: session.user.email,
+      },
+    });
+  } catch (error: unknown) {
+    callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
+  }
+}
+
 async function buildAuthResponse(
   userId: string,
   email: string,
@@ -149,11 +212,13 @@ async function buildAuthResponse(
   userAgent?: string,
   ipAddress?: string,
 ): Promise<SignupResponse> {
-  const refreshToken = generateRefreshToken();
+  const sessionId = randomUUID();
+  const refreshToken = generateRefreshToken(sessionId);
   const refreshTokenHash = await bcrypt.hash(refreshToken, BCRYPT_COST);
 
-  const session = await prisma.session.create({
+  await prisma.session.create({
     data: {
+      id: sessionId,
       userId,
       refreshTokenHash,
       deviceName,
@@ -165,7 +230,7 @@ async function buildAuthResponse(
 
   return {
     tokens: {
-      accessToken: signAccessToken(userId, session.id),
+      accessToken: signAccessToken(userId, sessionId),
       refreshToken,
     },
     user: {
