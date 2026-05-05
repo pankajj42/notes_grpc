@@ -18,6 +18,7 @@ import {
   type SignupResponse,
 } from "@notes/shared-types";
 import * as grpc from "@grpc/grpc-js";
+import { rateLimit } from "express-rate-limit";
 import { Router, type Request } from "express";
 import type { CookieOptions, Response } from "express";
 import { config } from "../config.js";
@@ -27,6 +28,25 @@ import { validate } from "../middleware/validate.js";
 import { loginBodySchema, sessionIdParamsSchema, signupBodySchema } from "../validation/auth.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
+
+// 10 refresh calls per minute per session (keyed by sessionId embedded in the cookie)
+const refreshRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const cookie = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
+    if (typeof cookie === "string") {
+      const dotIndex = cookie.indexOf(".");
+      if (dotIndex !== -1) return cookie.slice(0, dotIndex);
+    }
+    return req.ip ?? "unknown";
+  },
+  handler: (_req, res) => {
+    res.status(429).json({ status: "error", code: "RATE_LIMITED", message: "Too many refresh attempts. Try again later." });
+  },
+});
 
 type HttpAuthPayload = {
   tokens: {
@@ -75,7 +95,7 @@ export function createAuthRouter(): Router {
     }
   });
 
-  router.post("/refresh", async (req, res, next) => {
+  router.post("/refresh", refreshRateLimiter, async (req, res, next) => {
     try {
       const refreshToken = req.cookies[REFRESH_COOKIE_NAME] as string | undefined;
       if (typeof refreshToken !== "string" || refreshToken.trim() === "") {

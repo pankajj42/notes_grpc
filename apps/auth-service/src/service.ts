@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import * as grpc from "@grpc/grpc-js";
 import bcrypt from "bcrypt";
+import logger from "./logger";
 import {
   type EmptyRequest,
   ErrorCodes,
@@ -31,6 +32,7 @@ import { generateRefreshToken, signAccessToken } from "./tokens";
 type UnaryCallback<T> = grpc.sendUnaryData<T>;
 
 const BCRYPT_COST = 12;
+const MAX_FAILED_REFRESH_ATTEMPTS = 5;
 
 export function createAuthHandlers(): grpc.UntypedServiceImplementation {
   return {
@@ -103,13 +105,16 @@ async function handleSignup(
       },
     });
 
+    const ipAddress = extractOptionalMetadata(call, "x-client-ip", 64);
     const response = await buildAuthResponse(
       user.id,
       user.email,
       parsed.data.deviceName,
       extractOptionalMetadata(call, "x-user-agent", 512),
-      extractOptionalMetadata(call, "x-client-ip", 64),
+      ipAddress,
     );
+    const sessionId = response.tokens.refreshToken.split(".")[0];
+    logger.info({ event: "auth", type: "signup", userId: user.id, sessionId, ipAddress }, "User signed up");
     callback(null, response);
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
@@ -140,13 +145,16 @@ async function handleLogin(
       return;
     }
 
+    const ipAddress = extractOptionalMetadata(call, "x-client-ip", 64);
     const response = await buildAuthResponse(
       user.id,
       user.email,
       parsed.data.deviceName,
       extractOptionalMetadata(call, "x-user-agent", 512),
-      extractOptionalMetadata(call, "x-client-ip", 64),
+      ipAddress,
     );
+    const sessionId = response.tokens.refreshToken.split(".")[0];
+    logger.info({ event: "auth", type: "login", userId: user.id, sessionId, ipAddress }, "User logged in");
     callback(null, response);
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
@@ -183,6 +191,11 @@ async function handleRefreshToken(
       return;
     }
 
+    if (session.lockedAt != null) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Session is locked due to too many failed attempts"));
+      return;
+    }
+
     if (session.expiresAt < new Date()) {
       callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Refresh token has expired"));
       return;
@@ -201,10 +214,30 @@ async function handleRefreshToken(
           where: { id: sessionId },
           data: { revokedAt: new Date() },
         });
+        logger.warn(
+          { event: "security", type: "refresh_token_reuse", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+          "Refresh token reuse detected — session revoked",
+        );
         callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Refresh token reuse detected"));
         return;
       }
 
+      // Not a reuse attempt — just an invalid token; increment failed-attempt counter
+      const newAttempts = session.failedRefreshAttempts + 1;
+      const shouldLock = newAttempts >= MAX_FAILED_REFRESH_ATTEMPTS;
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: {
+          failedRefreshAttempts: newAttempts,
+          lockedAt: shouldLock ? new Date() : null,
+        },
+      });
+      if (shouldLock) {
+        logger.warn(
+          { event: "security", type: "session_locked", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+          "Session locked after too many failed refresh attempts",
+        );
+      }
       callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid refresh token"));
       return;
     }
@@ -217,9 +250,15 @@ async function handleRefreshToken(
       data: {
         previousTokenHash: session.refreshTokenHash,
         refreshTokenHash: newRefreshTokenHash,
+        failedRefreshAttempts: 0,
         lastUsedAt: new Date(),
       },
     });
+
+    logger.info(
+      { event: "auth", type: "token_refresh", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+      "Refresh token rotated",
+    );
 
     callback(null, {
       tokens: {
@@ -343,6 +382,11 @@ async function handleLogoutSession(
       data: { revokedAt: new Date() },
     });
 
+    logger.info(
+      { event: "auth", type: "logout", userId, sessionId: session.id },
+      "Session revoked",
+    );
+
     callback(null, {});
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
@@ -364,6 +408,8 @@ async function handleLogoutAllSessions(
       where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
+
+    logger.info({ event: "auth", type: "logout_all", userId }, "All sessions revoked");
 
     callback(null, {});
   } catch (error: unknown) {
