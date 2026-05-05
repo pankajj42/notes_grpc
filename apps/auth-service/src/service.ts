@@ -194,15 +194,21 @@ async function handleRefreshToken(
       return;
     }
 
+    const newRefreshToken = generateRefreshToken(sessionId);
+    const newRefreshTokenHash = await bcrypt.hash(newRefreshToken, 10);
+
     await prisma.session.update({
       where: { id: sessionId },
-      data: { lastUsedAt: new Date() },
+      data: {
+        refreshTokenHash: newRefreshTokenHash,
+        lastUsedAt: new Date(),
+      },
     });
 
     callback(null, {
       tokens: {
         accessToken: signAccessToken(session.userId, sessionId),
-        refreshToken: rawToken,
+        refreshToken: newRefreshToken,
       },
       user: {
         userId: session.userId,
