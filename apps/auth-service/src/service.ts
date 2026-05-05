@@ -190,6 +190,21 @@ async function handleRefreshToken(
 
     const tokenMatches = await bcrypt.compare(rawToken, session.refreshTokenHash);
     if (!tokenMatches) {
+      // Check if this is a previously-rotated token (reuse detection)
+      const isPreviousToken =
+        session.previousTokenHash != null &&
+        (await bcrypt.compare(rawToken, session.previousTokenHash));
+
+      if (isPreviousToken) {
+        // Token theft detected: revoke the session immediately so neither party can use it
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { revokedAt: new Date() },
+        });
+        callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Refresh token reuse detected"));
+        return;
+      }
+
       callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Invalid refresh token"));
       return;
     }
@@ -200,6 +215,7 @@ async function handleRefreshToken(
     await prisma.session.update({
       where: { id: sessionId },
       data: {
+        previousTokenHash: session.refreshTokenHash,
         refreshTokenHash: newRefreshTokenHash,
         lastUsedAt: new Date(),
       },
