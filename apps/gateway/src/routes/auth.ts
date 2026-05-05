@@ -4,6 +4,7 @@ import {
   ErrorCodes,
   successResponse,
   type EmptyRequest,
+  type ListSessionsResponse,
   type LoginRequest,
   type LoginResponse,
   type PublicKeyResponse,
@@ -16,6 +17,7 @@ import * as grpc from "@grpc/grpc-js";
 import { Router, type Request } from "express";
 import type { CookieOptions } from "express";
 import { config } from "../config.js";
+import { authenticate } from "../middleware/authenticate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
 import { loginBodySchema, signupBodySchema } from "../validation/auth.js";
@@ -85,11 +87,22 @@ export function createAuthRouter(): Router {
     }
   });
 
+  router.get("/sessions", authenticate, async (req, res, next) => {
+    try {
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createSessionMetadata(userId, sessionId);
+      const response = await unaryCall<EmptyRequest, ListSessionsResponse>("ListSessions", {}, metadata);
+      res.status(200).json(successResponse(response));
+    } catch (error: unknown) {
+      next(toAppError(error));
+    }
+  });
+
   return router;
 }
 
 async function unaryCall<TRequest extends object, TResponse>(
-  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken",
+  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken" | "ListSessions",
   request: TRequest,
   metadata?: grpc.Metadata,
 ): Promise<TResponse> {
@@ -126,6 +139,13 @@ async function unaryCall<TRequest extends object, TResponse>(
           return;
         case "RefreshToken":
           client.RefreshToken(request, callback as (error: grpc.ServiceError | null, response: unknown) => void);
+          return;
+        case "ListSessions":
+          client.ListSessions(
+            request,
+            metadata ?? new grpc.Metadata(),
+            callback as (error: grpc.ServiceError | null, response: unknown) => void,
+          );
           return;
       }
     });
@@ -172,6 +192,23 @@ function grpcStatusToErrorCode(statusCode: number): keyof typeof ErrorCodeToHttp
     default:
       return ErrorCodes.INTERNAL;
   }
+}
+
+function createSessionMetadata(userId: string, sessionId: string): grpc.Metadata {
+  const metadata = new grpc.Metadata();
+  metadata.set("x-user-id", userId);
+  metadata.set("x-session-id", sessionId);
+  return metadata;
+}
+
+function getAuthenticatedUser(user: Express.Request["user"]): { userId: string; sessionId: string } {
+  if (user?.userId === undefined || user.userId.trim() === "") {
+    throw new AppError(ErrorCodes.UNAUTHENTICATED);
+  }
+  if (user.sessionId === undefined || user.sessionId.trim() === "") {
+    throw new AppError(ErrorCodes.UNAUTHENTICATED);
+  }
+  return { userId: user.userId, sessionId: user.sessionId };
 }
 
 function createRequestMetadata(req: Request): grpc.Metadata {

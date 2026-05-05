@@ -54,10 +54,10 @@ export function createAuthHandlers(): grpc.UntypedServiceImplementation {
       void handleRefreshToken(call, callback);
     },
     ListSessions: (
-      _call: grpc.ServerUnaryCall<EmptyRequest, ListSessionsResponse>,
+      call: grpc.ServerUnaryCall<EmptyRequest, ListSessionsResponse>,
       callback: UnaryCallback<ListSessionsResponse>,
     ) => {
-      callback(toGrpcError(ErrorCodes.UNIMPLEMENTED, "ListSessions will be implemented in a later phase"));
+      void handleListSessions(call, callback);
     },
     LogoutSession: (
       _call: grpc.ServerUnaryCall<LogoutSessionRequest, LogoutSessionResponse>,
@@ -238,6 +238,42 @@ async function buildAuthResponse(
       email,
     },
   };
+}
+
+async function handleListSessions(
+  call: grpc.ServerUnaryCall<EmptyRequest, ListSessionsResponse>,
+  callback: UnaryCallback<ListSessionsResponse>,
+): Promise<void> {
+  try {
+    const userId = extractOptionalMetadata(call, "x-user-id", 36);
+    if (userId == null) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Missing user identity"));
+      return;
+    }
+
+    const currentSessionId = extractOptionalMetadata(call, "x-session-id", 36);
+
+    const sessions = await prisma.session.findMany({
+      where: {
+        userId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { lastUsedAt: "desc" },
+    });
+
+    callback(null, {
+      sessions: sessions.map((s) => ({
+        sessionId: s.id,
+        deviceName: s.deviceName ?? "",
+        createdAt: s.createdAt.toISOString(),
+        lastActivityAt: s.lastUsedAt.toISOString(),
+        isCurrent: s.id === currentSessionId,
+      })),
+    });
+  } catch (error: unknown) {
+    callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
+  }
 }
 
 function toGrpcError(code: ErrorCode, message: string): grpc.ServiceError {

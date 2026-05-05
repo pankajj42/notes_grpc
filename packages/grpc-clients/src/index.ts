@@ -41,6 +41,17 @@ export interface AuthServiceClient {
 			callback: (error: grpc.ServiceError | null, response: unknown) => void,
 		): grpc.ClientUnaryCall;
 	};
+	ListSessions: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
 	close: () => void;
 }
 
