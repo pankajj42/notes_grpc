@@ -3,6 +3,7 @@ import { type RefreshTokenRequest, type RefreshTokenResponse, RefreshTokenReques
 import logger from "../logger.js";
 import { signAccessToken, generateRefreshToken } from "../tokens.js";
 import { toGrpcError, firstIssue, getErrorMessage } from "../utils/errors.js";
+import { extractCorrelationFields } from "../utils/metadata.js";
 import {
   findSessionWithUser,
   verifyRefreshToken,
@@ -17,6 +18,7 @@ export async function handleRefreshToken(
   call: grpc.ServerUnaryCall<RefreshTokenRequest, RefreshTokenResponse>,
   callback: UnaryCallback<RefreshTokenResponse>,
 ): Promise<void> {
+  const correlation = extractCorrelationFields(call);
   try {
     const parsed = RefreshTokenRequestSchema.safeParse(call.request);
     if (!parsed.success) {
@@ -54,7 +56,14 @@ export async function handleRefreshToken(
     if (tokenStatus === "reuse") {
       await revokeSession(sessionId);
       logger.warn(
-        { event: "security", type: "refresh_token_reuse", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+        {
+          ...correlation,
+          event: "security",
+          type: "refresh_token_reuse",
+          sessionId,
+          userId: session.userId,
+          ipAddress: session.ipAddress,
+        },
         "Refresh token reuse detected — session revoked",
       );
       callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Refresh token reuse detected"));
@@ -65,7 +74,14 @@ export async function handleRefreshToken(
       const shouldLock = await incrementFailedRefreshAttempts(sessionId);
       if (shouldLock) {
         logger.warn(
-          { event: "security", type: "session_locked", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+          {
+            ...correlation,
+            event: "security",
+            type: "session_locked",
+            sessionId,
+            userId: session.userId,
+            ipAddress: session.ipAddress,
+          },
           "Session locked after too many failed refresh attempts",
         );
       }
@@ -77,7 +93,14 @@ export async function handleRefreshToken(
     await updateSessionRefreshToken(sessionId, newRefreshToken);
 
     logger.info(
-      { event: "auth", type: "token_refresh", sessionId, userId: session.userId, ipAddress: session.ipAddress },
+      {
+        ...correlation,
+        event: "auth",
+        type: "token_refresh",
+        sessionId,
+        userId: session.userId,
+        ipAddress: session.ipAddress,
+      },
       "Refresh token rotated",
     );
 
@@ -92,6 +115,7 @@ export async function handleRefreshToken(
       },
     });
   } catch (error: unknown) {
+    logger.error({ ...correlation, event: "auth", type: "token_refresh_failed", error }, "Refresh token flow failed");
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
   }
 }

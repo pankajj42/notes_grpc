@@ -12,6 +12,7 @@ declare global {
     interface Response {
       locals: {
         user?: AuthenticatedUser;
+        requestId?: string;
         validated: Record<string, unknown>;
       };
     }

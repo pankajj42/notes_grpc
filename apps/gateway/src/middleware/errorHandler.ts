@@ -6,6 +6,7 @@ import {
   errorResponse,
   type ErrorCode,
 } from "@notes/shared-types";
+import logger from "../logger.js";
 
 /**
  * Opaque application error that can be thrown anywhere in the request
@@ -42,25 +43,57 @@ export class AppError extends Error {
  */
 export function globalErrorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ): void {
+  const requestId = res.locals.requestId;
+
   if (err instanceof AppError) {
+    logger.warn(
+      {
+        event: "http",
+        type: "handled_error",
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+        statusCode: err.statusCode,
+        code: err.code,
+        details: err.details,
+        userId: req.user?.userId,
+        sessionId: req.user?.sessionId,
+      },
+      "Handled application error",
+    );
+
     res.status(err.statusCode).json(
-      errorResponse(err.code, err.message, err.details),
+      errorResponse(err.code, err.message, err.details, requestId),
     );
     return;
   }
 
-  // Log unexpected errors server-side (will use proper logger later)
-  console.error("[gateway] Unhandled error:", err);
+  logger.error(
+    {
+      event: "http",
+      type: "unhandled_error",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode: 500,
+      userId: req.user?.userId,
+      sessionId: req.user?.sessionId,
+      err,
+    },
+    "Unhandled gateway error",
+  );
 
   res.status(500).json(
     errorResponse(
       ErrorCodes.INTERNAL,
       ErrorMessages.INTERNAL,
+      undefined,
+      requestId,
     ),
   );
 }
@@ -70,10 +103,27 @@ export function globalErrorHandler(
  * Register this BEFORE `globalErrorHandler` but AFTER all routes.
  */
 export function notFoundHandler(req: Request, res: Response): void {
+  const requestId = res.locals.requestId;
+
+  logger.info(
+    {
+      event: "http",
+      type: "not_found",
+      requestId,
+      method: req.method,
+      path: req.path,
+      userId: req.user?.userId,
+      sessionId: req.user?.sessionId,
+    },
+    "Route not found",
+  );
+
   res.status(404).json(
     errorResponse(
       ErrorCodes.NOT_FOUND,
       `Route ${req.method} ${req.path} not found`,
+      undefined,
+      requestId,
     ),
   );
 }

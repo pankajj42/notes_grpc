@@ -1,6 +1,6 @@
 import * as grpc from "@grpc/grpc-js";
 import { rateLimit } from "express-rate-limit";
-import { Router, type Request } from "express";
+import { Router } from "express";
 import { z } from "zod";
 import { createAuthServiceClient } from "@notes/grpc-clients";
 import {
@@ -24,6 +24,7 @@ import {
   type SignupResponse,
 } from "@notes/shared-types";
 import { config } from "../config.js";
+import { createCorrelationMetadata } from "../lib/correlation.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
@@ -65,7 +66,7 @@ export function createAuthRouter(): Router {
   router.post("/signup", validate(SignupRequestSchema), async (req, res, next) => {
     try {
       const response = await callAuth<SignupResponse>((c, cb) =>
-        c.Signup(res.locals.validated.body as SignupRequest, createRequestMetadata(req), cb),
+        c.Signup(res.locals.validated.body as SignupRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),
       );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(201).json(successResponse(toHttpAuthPayload(response)));
@@ -77,7 +78,7 @@ export function createAuthRouter(): Router {
   router.post("/login", validate(LoginRequestSchema), async (req, res, next) => {
     try {
       const response = await callAuth<LoginResponse>((c, cb) =>
-        c.Login(res.locals.validated.body as LoginRequest, createRequestMetadata(req), cb),
+        c.Login(res.locals.validated.body as LoginRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),
       );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(200).json(successResponse(toHttpAuthPayload(response)));
@@ -86,10 +87,10 @@ export function createAuthRouter(): Router {
     }
   });
 
-  router.get("/public-key", async (_req, res, next) => {
+  router.get("/public-key", async (req, res, next) => {
     try {
       const response = await callAuth<PublicKeyResponse>((c, cb) =>
-        c.GetPublicKey({} as EmptyRequest, cb),
+        c.GetPublicKey({} as EmptyRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),
       );
       res.status(200).json(successResponse(response));
     } catch (error: unknown) {
@@ -105,7 +106,7 @@ export function createAuthRouter(): Router {
         return;
       }
       const response = await callAuth<RefreshTokenResponse>((c, cb) =>
-        c.RefreshToken({ refreshToken } as RefreshTokenRequest, cb),
+        c.RefreshToken({ refreshToken } as RefreshTokenRequest, createCorrelationMetadata(req, undefined, res.locals.requestId), cb),
       );
       setRefreshTokenCookie(res, response.tokens.refreshToken);
       res.status(200).json(successResponse(toHttpAuthPayload(response)));
@@ -117,7 +118,7 @@ export function createAuthRouter(): Router {
   router.get("/sessions", authenticate, async (req, res, next) => {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
-      const metadata = createSessionMetadata(userId, sessionId);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const response = await callAuth<ListSessionsResponse>((c, cb) =>
         c.ListSessions({} as EmptyRequest, metadata, cb),
       );
@@ -130,7 +131,7 @@ export function createAuthRouter(): Router {
   router.post("/logout", authenticate, async (req, res, next) => {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
-      const metadata = createSessionMetadata(userId, sessionId);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       await callAuth<LogoutSessionResponse>((c, cb) =>
         c.LogoutSession({ sessionId } as LogoutSessionRequest, metadata, cb),
       );
@@ -145,7 +146,7 @@ export function createAuthRouter(): Router {
     try {
       const { userId, sessionId: currentSessionId } = getAuthenticatedUser(req.user);
       const targetSessionId = (res.locals.validated.params as { id: string }).id;
-      const metadata = createSessionMetadata(userId, currentSessionId);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId: currentSessionId }, res.locals.requestId);
       await callAuth<LogoutSessionResponse>((c, cb) =>
         c.LogoutSession({ sessionId: targetSessionId } as LogoutSessionRequest, metadata, cb),
       );
@@ -158,7 +159,7 @@ export function createAuthRouter(): Router {
   router.post("/logout-all", authenticate, async (req, res, next) => {
     try {
       const { userId, sessionId } = getAuthenticatedUser(req.user);
-      const metadata = createSessionMetadata(userId, sessionId);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       await callAuth<LogoutAllSessionsResponse>((c, cb) =>
         c.LogoutAllSessions({} as LogoutAllSessionsRequest, metadata, cb),
       );
@@ -184,33 +185,6 @@ function toHttpAuthPayload(response: SignupResponse | LoginResponse): HttpAuthPa
     tokens: { accessToken: response.tokens.accessToken },
     user: response.user,
   };
-}
-
-function createRequestMetadata(req: Request): grpc.Metadata {
-  const metadata = new grpc.Metadata();
-
-  const userAgent = req.get("user-agent");
-  if (typeof userAgent === "string" && userAgent.trim() !== "") {
-    metadata.set("x-user-agent", userAgent.trim());
-  }
-
-  const forwardedFor = req.get("x-forwarded-for");
-  const candidateIp =
-    typeof forwardedFor === "string" && forwardedFor.trim() !== ""
-      ? forwardedFor.split(",")[0]?.trim()
-      : req.ip;
-  if (typeof candidateIp === "string" && candidateIp.trim() !== "") {
-    metadata.set("x-client-ip", candidateIp.trim());
-  }
-
-  return metadata;
-}
-
-function createSessionMetadata(userId: string, sessionId: string): grpc.Metadata {
-  const metadata = new grpc.Metadata();
-  metadata.set("x-user-id", userId);
-  metadata.set("x-session-id", sessionId);
-  return metadata;
 }
 
 function getAuthenticatedUser(user: Express.Request["user"]): { userId: string; sessionId: string } {

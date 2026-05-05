@@ -1,17 +1,19 @@
 import "dotenv/config";
 import { createGrpcServer, shutdownGrpcServer, startGrpcServer } from "./server";
+import logger from "./logger";
 
 async function main(): Promise<void> {
 	const server = createGrpcServer();
 	await startGrpcServer(server);
 
 	const shutdown = async (): Promise<void> => {
-		console.log("[notes-service] shutting down...");
+		logger.info({ event: "lifecycle", type: "shutdown_start" }, "notes-service shutting down");
 		try {
 			await shutdownGrpcServer(server);
+			logger.info({ event: "lifecycle", type: "shutdown_complete" }, "notes-service shutdown complete");
 			process.exitCode = 0;
 		} catch (error: unknown) {
-			console.error("[notes-service] shutdown failed", error);
+			logger.error({ event: "lifecycle", type: "shutdown_failed", error }, "notes-service shutdown failed");
 			process.exitCode = 1;
 		}
 	};
@@ -26,6 +28,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-	console.error("[notes-service] startup failed", error);
+	logger.error({ event: "lifecycle", type: "startup_failed", error }, "notes-service startup failed");
 	process.exitCode = 1;
 });

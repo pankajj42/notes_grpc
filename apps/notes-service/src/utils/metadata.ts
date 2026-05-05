@@ -27,19 +27,15 @@ export function extractUserId(call: grpc.ServerUnaryCall<unknown, unknown>): str
   return extractOptionalMetadata(call, CorrelationHeaderNames.userId, CorrelationFieldMaxLength.userId);
 }
 
-export function extractSessionId(call: grpc.ServerUnaryCall<unknown, unknown>): string | undefined {
-  return extractOptionalMetadata(call, CorrelationHeaderNames.sessionId, CorrelationFieldMaxLength.sessionId);
-}
-
 export function extractCorrelationFields(call: grpc.ServerUnaryCall<unknown, unknown>): CorrelationFields {
   const correlation: CorrelationFields = {};
 
-  const userId = extractUserId(call);
+  const userId = extractOptionalMetadata(call, CorrelationHeaderNames.userId, CorrelationFieldMaxLength.userId);
   if (userId !== undefined) {
     correlation.userId = userId;
   }
 
-  const sessionId = extractSessionId(call);
+  const sessionId = extractOptionalMetadata(call, CorrelationHeaderNames.sessionId, CorrelationFieldMaxLength.sessionId);
   if (sessionId !== undefined) {
     correlation.sessionId = sessionId;
   }

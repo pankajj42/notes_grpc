@@ -1,5 +1,6 @@
 import "dotenv/config";
 import type { Server } from "node:http";
+import logger from "./logger.js";
 import { createHttpApp, shutdownHttpServer, startHttpServer } from "./server.js";
 
 async function main(): Promise<void> {
@@ -7,12 +8,13 @@ async function main(): Promise<void> {
 	const server = await startHttpServer(app);
 
 	const shutdown = async (httpServer: Server): Promise<void> => {
-		console.log("[gateway] shutting down...");
+		logger.info({ event: "lifecycle", type: "shutdown_start" }, "gateway shutting down");
 		try {
 			await shutdownHttpServer(httpServer);
+			logger.info({ event: "lifecycle", type: "shutdown_complete" }, "gateway shutdown complete");
 			process.exitCode = 0;
 		} catch (error: unknown) {
-			console.error("[gateway] shutdown failed", error);
+			logger.error({ event: "lifecycle", type: "shutdown_failed", error }, "gateway shutdown failed");
 			process.exitCode = 1;
 		}
 	};
@@ -27,6 +29,6 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-	console.error("[gateway] startup failed", error);
+	logger.error({ event: "lifecycle", type: "startup_failed", error }, "gateway startup failed");
 	process.exitCode = 1;
 });

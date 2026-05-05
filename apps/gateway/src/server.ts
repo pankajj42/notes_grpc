@@ -3,8 +3,10 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { Server } from "node:http";
 import { config } from "./config.js";
+import logger from "./logger.js";
 import { authenticate } from "./middleware/authenticate.js";
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { attachRequestContext, requestLoggingMiddleware } from "./middleware/requestLogging.js";
 import { createAuthRouter } from "./routes/auth.js";
 import { createNotesRouter } from "./routes/notes.js";
 
@@ -17,6 +19,9 @@ export function createHttpApp(): Express {
       credentials: true,
     }),
   );
+
+  app.use(attachRequestContext);
+  app.use(requestLoggingMiddleware);
 
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
@@ -42,7 +47,7 @@ export function createHttpApp(): Express {
 export async function startHttpServer(app: Express): Promise<Server> {
   return await new Promise<Server>((resolve, reject) => {
     const server = app.listen(config.port, () => {
-      console.log(`[gateway] HTTP listening on 0.0.0.0:${String(config.port)}`);
+      logger.info({ event: "lifecycle", type: "http_started", port: config.port }, "gateway HTTP listening");
       resolve(server);
     });
 

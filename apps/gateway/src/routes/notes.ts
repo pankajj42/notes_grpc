@@ -24,6 +24,7 @@ import {
   type UpdateNoteResponse,
 } from "@notes/shared-types";
 import { config } from "../config.js";
+import { createCorrelationMetadata } from "../lib/correlation.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
 import { grpcUnaryCall, toAppError } from "../lib/grpc.js";
@@ -33,8 +34,8 @@ export function createNotesRouter(): Router {
 
   router.get("/", validate(GetNotesRequestSchema, "query"), async (req, res, next) => {
     try {
-      const userId = getAuthenticatedUserId(req.user);
-      const metadata = createUserMetadata(userId);
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const request = res.locals.validated.query as GetNotesRequest;
       const response = await callNotes<GetNotesResponse>((c, cb) =>
         c.GetNotes(request, metadata, cb),
@@ -47,8 +48,8 @@ export function createNotesRouter(): Router {
 
   router.get("/:noteId", validate(GetNoteRequestSchema, "params"), async (req, res, next) => {
     try {
-      const userId = getAuthenticatedUserId(req.user);
-      const metadata = createUserMetadata(userId);
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const request = res.locals.validated.params as GetNoteRequest;
       const response = await callNotes<GetNoteResponse>((c, cb) =>
         c.GetNote(request, metadata, cb),
@@ -61,8 +62,8 @@ export function createNotesRouter(): Router {
 
   router.post("/", validate(CreateNoteRequestSchema), async (req, res, next) => {
     try {
-      const userId = getAuthenticatedUserId(req.user);
-      const metadata = createUserMetadata(userId);
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const request = res.locals.validated.body as CreateNoteRequest;
       const grpcRequest: GrpcCreateNoteRequest = {
         ...request,
@@ -79,8 +80,8 @@ export function createNotesRouter(): Router {
 
   router.put("/:noteId", validate(GetNoteRequestSchema, "params"), async (req, res, next) => {
     try {
-      const userId = getAuthenticatedUserId(req.user);
-      const metadata = createUserMetadata(userId);
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const parsed = UpdateNoteRequestSchema.safeParse({
         noteId: (res.locals.validated.params as { noteId: string }).noteId,
         title: typeof req.body?.title === "string" ? req.body.title : undefined,
@@ -100,8 +101,8 @@ export function createNotesRouter(): Router {
 
   router.delete("/:noteId", validate(DeleteNoteRequestSchema, "params"), async (req, res, next) => {
     try {
-      const userId = getAuthenticatedUserId(req.user);
-      const metadata = createUserMetadata(userId);
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createCorrelationMetadata(req, { userId, sessionId }, res.locals.requestId);
       const request = res.locals.validated.params as DeleteNoteRequest;
       const response = await callNotes<DeleteNoteResponse>((c, cb) =>
         c.DeleteNote(request, metadata, cb),
@@ -128,17 +129,14 @@ function callNotes<TResponse>(
   return grpcUnaryCall<TResponse>((cb) => fn(client, cb), () => client.close());
 }
 
-function createUserMetadata(userId: string): grpc.Metadata {
-  const metadata = new grpc.Metadata();
-  metadata.set("x-user-id", userId);
-  return metadata;
-}
-
-function getAuthenticatedUserId(user: Express.Request["user"]): string {
+function getAuthenticatedUser(user: Express.Request["user"]): { userId: string; sessionId: string } {
   if (user?.userId === undefined || user.userId.trim() === "") {
     throw new AppError(ErrorCodes.UNAUTHENTICATED);
   }
-  return user.userId;
+  if (user.sessionId === undefined || user.sessionId.trim() === "") {
+    throw new AppError(ErrorCodes.UNAUTHENTICATED);
+  }
+  return { userId: user.userId, sessionId: user.sessionId };
 }
 
 function sharedToProtoContentType(contentType: NoteContentType): GrpcCreateNoteRequest["contentType"] {

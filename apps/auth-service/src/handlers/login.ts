@@ -2,7 +2,7 @@ import * as grpc from "@grpc/grpc-js";
 import { type LoginRequest, type LoginResponse, LoginRequestSchema, ErrorCodes } from "@notes/shared-types";
 import logger from "../logger.js";
 import { toGrpcError, firstIssue, getErrorMessage } from "../utils/errors.js";
-import { extractOptionalMetadata } from "../utils/metadata.js";
+import { extractCorrelationFields } from "../utils/metadata.js";
 import { findUserByEmail, verifyPassword } from "../services/user.js";
 import { buildAuthResponse } from "../services/auth.js";
 
@@ -12,6 +12,7 @@ export async function handleLogin(
   call: grpc.ServerUnaryCall<LoginRequest, LoginResponse>,
   callback: UnaryCallback<LoginResponse>,
 ): Promise<void> {
+  const correlation = extractCorrelationFields(call);
   try {
     const parsed = LoginRequestSchema.safeParse(call.request);
     if (!parsed.success) {
@@ -31,18 +32,19 @@ export async function handleLogin(
       return;
     }
 
-    const ipAddress = extractOptionalMetadata(call, "x-client-ip", 64);
+    const ipAddress = correlation.clientIp;
     const response = await buildAuthResponse(
       user.id,
       user.email,
       parsed.data.deviceName,
-      extractOptionalMetadata(call, "x-user-agent", 512),
+      correlation.userAgent,
       ipAddress,
     );
     const sessionId = response.tokens.refreshToken.split(".")[0];
-    logger.info({ event: "auth", type: "login", userId: user.id, sessionId, ipAddress }, "User logged in");
+    logger.info({ ...correlation, event: "auth", type: "login", userId: user.id, sessionId, ipAddress }, "User logged in");
     callback(null, response);
   } catch (error: unknown) {
+    logger.error({ ...correlation, event: "auth", type: "login_failed", error }, "Login failed");
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
   }
 }

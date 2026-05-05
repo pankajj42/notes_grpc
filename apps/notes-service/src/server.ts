@@ -1,5 +1,6 @@
 import * as grpc from "@grpc/grpc-js";
 import { config } from "./config";
+import logger from "./logger";
 import { createNotesHandlers } from "./service";
 import { getNotesServiceDefinition } from "./serviceDefinition";
 
@@ -27,7 +28,7 @@ export async function startGrpcServer(server: grpc.Server): Promise<void> {
     });
   });
 
-  console.log(`[notes-service] gRPC listening on ${address}`);
+  logger.info({ event: "lifecycle", type: "grpc_started", address }, "notes-service gRPC listening");
 }
 
 export async function shutdownGrpcServer(server: grpc.Server): Promise<void> {

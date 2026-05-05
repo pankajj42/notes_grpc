@@ -26,10 +26,17 @@ export interface AuthServiceClient {
 			callback: (error: grpc.ServiceError | null, response: unknown) => void,
 		): grpc.ClientUnaryCall;
 	};
-	GetPublicKey: grpc.ClientUnaryCall & ((
-		request: unknown,
-		callback: (error: grpc.ServiceError | null, response: unknown) => void,
-	) => grpc.ClientUnaryCall);
+	GetPublicKey: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
 	RefreshToken: grpc.ClientUnaryCall & {
 		(
 			request: unknown,
