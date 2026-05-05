@@ -11,6 +11,9 @@ import {
   LoginRequestSchema,
   type LogoutSessionRequest,
   type LogoutSessionResponse,
+  LogoutSessionRequestSchema,
+  type LogoutAllSessionsRequest,
+  type LogoutAllSessionsResponse,
   type PublicKeyResponse,
   type RefreshTokenRequest,
   type RefreshTokenResponse,
@@ -60,10 +63,16 @@ export function createAuthHandlers(): grpc.UntypedServiceImplementation {
       void handleListSessions(call, callback);
     },
     LogoutSession: (
-      _call: grpc.ServerUnaryCall<LogoutSessionRequest, LogoutSessionResponse>,
+      call: grpc.ServerUnaryCall<LogoutSessionRequest, LogoutSessionResponse>,
       callback: UnaryCallback<LogoutSessionResponse>,
     ) => {
-      callback(toGrpcError(ErrorCodes.UNIMPLEMENTED, "LogoutSession will be implemented in a later phase"));
+      void handleLogoutSession(call, callback);
+    },
+    LogoutAllSessions: (
+      call: grpc.ServerUnaryCall<LogoutAllSessionsRequest, LogoutAllSessionsResponse>,
+      callback: UnaryCallback<LogoutAllSessionsResponse>,
+    ) => {
+      void handleLogoutAllSessions(call, callback);
     },
   };
 }
@@ -271,6 +280,70 @@ async function handleListSessions(
         isCurrent: s.id === currentSessionId,
       })),
     });
+  } catch (error: unknown) {
+    callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
+  }
+}
+
+async function handleLogoutSession(
+  call: grpc.ServerUnaryCall<LogoutSessionRequest, LogoutSessionResponse>,
+  callback: UnaryCallback<LogoutSessionResponse>,
+): Promise<void> {
+  try {
+    const parsed = LogoutSessionRequestSchema.safeParse(call.request);
+    if (!parsed.success) {
+      callback(toGrpcError(ErrorCodes.INVALID_ARGUMENT, firstIssue(parsed.error)));
+      return;
+    }
+
+    const userId = extractOptionalMetadata(call, "x-user-id", 36);
+    if (userId == null) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Missing user identity"));
+      return;
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: parsed.data.sessionId },
+    });
+
+    if (session == null || session.userId !== userId) {
+      callback(toGrpcError(ErrorCodes.NOT_FOUND, "Session not found"));
+      return;
+    }
+
+    if (session.revokedAt != null) {
+      callback(null, {});
+      return;
+    }
+
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { revokedAt: new Date() },
+    });
+
+    callback(null, {});
+  } catch (error: unknown) {
+    callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
+  }
+}
+
+async function handleLogoutAllSessions(
+  call: grpc.ServerUnaryCall<LogoutAllSessionsRequest, LogoutAllSessionsResponse>,
+  callback: UnaryCallback<LogoutAllSessionsResponse>,
+): Promise<void> {
+  try {
+    const userId = extractOptionalMetadata(call, "x-user-id", 36);
+    if (userId == null) {
+      callback(toGrpcError(ErrorCodes.UNAUTHENTICATED, "Missing user identity"));
+      return;
+    }
+
+    await prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
+    callback(null, {});
   } catch (error: unknown) {
     callback(toGrpcError(ErrorCodes.INTERNAL, getErrorMessage(error)));
   }

@@ -7,6 +7,10 @@ import {
   type ListSessionsResponse,
   type LoginRequest,
   type LoginResponse,
+  type LogoutAllSessionsRequest,
+  type LogoutAllSessionsResponse,
+  type LogoutSessionRequest,
+  type LogoutSessionResponse,
   type PublicKeyResponse,
   type RefreshTokenRequest,
   type RefreshTokenResponse,
@@ -15,12 +19,12 @@ import {
 } from "@notes/shared-types";
 import * as grpc from "@grpc/grpc-js";
 import { Router, type Request } from "express";
-import type { CookieOptions } from "express";
+import type { CookieOptions, Response } from "express";
 import { config } from "../config.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
-import { loginBodySchema, signupBodySchema } from "../validation/auth.js";
+import { loginBodySchema, sessionIdParamsSchema, signupBodySchema } from "../validation/auth.js";
 
 const REFRESH_COOKIE_NAME = "refreshToken";
 
@@ -98,11 +102,55 @@ export function createAuthRouter(): Router {
     }
   });
 
+  router.post("/logout", authenticate, async (req, res, next) => {
+    try {
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createSessionMetadata(userId, sessionId);
+      await unaryCall<LogoutSessionRequest, LogoutSessionResponse>(
+        "LogoutSession",
+        { sessionId },
+        metadata,
+      );
+      clearRefreshTokenCookie(res);
+      res.status(200).json(successResponse({}));
+    } catch (error: unknown) {
+      next(toAppError(error));
+    }
+  });
+
+  router.delete("/sessions/:id", authenticate, validate(sessionIdParamsSchema, "params"), async (req, res, next) => {
+    try {
+      const { userId, sessionId: currentSessionId } = getAuthenticatedUser(req.user);
+      const targetSessionId = (res.locals.validated.params as { id: string }).id;
+      const metadata = createSessionMetadata(userId, currentSessionId);
+      await unaryCall<LogoutSessionRequest, LogoutSessionResponse>(
+        "LogoutSession",
+        { sessionId: targetSessionId },
+        metadata,
+      );
+      res.status(200).json(successResponse({}));
+    } catch (error: unknown) {
+      next(toAppError(error));
+    }
+  });
+
+  router.post("/logout-all", authenticate, async (req, res, next) => {
+    try {
+      const { userId, sessionId } = getAuthenticatedUser(req.user);
+      const metadata = createSessionMetadata(userId, sessionId);
+      await unaryCall<LogoutAllSessionsRequest, LogoutAllSessionsResponse>("LogoutAllSessions", {}, metadata);
+      clearRefreshTokenCookie(res);
+      res.status(200).json(successResponse({}));
+    } catch (error: unknown) {
+      next(toAppError(error));
+    }
+  });
+
   return router;
 }
 
 async function unaryCall<TRequest extends object, TResponse>(
-  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken" | "ListSessions",
+  method: "Signup" | "Login" | "GetPublicKey" | "RefreshToken" | "ListSessions" | "LogoutSession" | "LogoutAllSessions",
   request: TRequest,
   metadata?: grpc.Metadata,
 ): Promise<TResponse> {
@@ -142,6 +190,20 @@ async function unaryCall<TRequest extends object, TResponse>(
           return;
         case "ListSessions":
           client.ListSessions(
+            request,
+            metadata ?? new grpc.Metadata(),
+            callback as (error: grpc.ServiceError | null, response: unknown) => void,
+          );
+          return;
+        case "LogoutSession":
+          client.LogoutSession(
+            request,
+            metadata ?? new grpc.Metadata(),
+            callback as (error: grpc.ServiceError | null, response: unknown) => void,
+          );
+          return;
+        case "LogoutAllSessions":
+          client.LogoutAllSessions(
             request,
             metadata ?? new grpc.Metadata(),
             callback as (error: grpc.ServiceError | null, response: unknown) => void,
@@ -228,6 +290,18 @@ function createRequestMetadata(req: Request): grpc.Metadata {
   }
 
   return metadata;
+}
+
+function clearRefreshTokenCookie(res: Response): void {
+  res.clearCookie(REFRESH_COOKIE_NAME, {
+    path: "/auth",
+    httpOnly: true,
+    secure: config.cookieSecure,
+    sameSite: config.cookieSameSite,
+    ...(typeof config.cookieDomain === "string" && config.cookieDomain.trim() !== ""
+      ? { domain: config.cookieDomain }
+      : {}),
+  });
 }
 
 function setRefreshTokenCookie(

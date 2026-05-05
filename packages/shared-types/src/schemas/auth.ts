@@ -51,6 +51,8 @@ export const LogoutSessionRequestSchema = z.object({
   sessionId: sessionIdSchema,
 });
 
+export const LogoutAllSessionsRequestSchema = z.object({});
+
 export const EmptyRequestSchema = z.object({});
 
 // ---------------------------------------------------------------------------
@@ -61,6 +63,7 @@ export type SignupRequest = z.infer<typeof SignupRequestSchema>;
 export type LoginRequest = z.infer<typeof LoginRequestSchema>;
 export type RefreshTokenRequest = z.infer<typeof RefreshTokenRequestSchema>;
 export type LogoutSessionRequest = z.infer<typeof LogoutSessionRequestSchema>;
+export type LogoutAllSessionsRequest = z.infer<typeof LogoutAllSessionsRequestSchema>;
 export type EmptyRequest = z.infer<typeof EmptyRequestSchema>;
 
 // ---------------------------------------------------------------------------
@@ -104,6 +107,8 @@ export const PublicKeyResponseSchema = z.object({
 
 export const LogoutSessionResponseSchema = z.object({});
 
+export const LogoutAllSessionsResponseSchema = z.object({});
+
 export type AuthTokens = z.infer<typeof AuthTokensSchema>;
 export type UserInfo = z.infer<typeof UserInfoSchema>;
 export type SessionInfo = z.infer<typeof SessionInfoSchema>;
@@ -114,3 +119,4 @@ export type RefreshTokenResponse = z.infer<typeof RefreshTokenResponseSchema>;
 export type ListSessionsResponse = z.infer<typeof ListSessionsResponseSchema>;
 export type PublicKeyResponse = z.infer<typeof PublicKeyResponseSchema>;
 export type LogoutSessionResponse = z.infer<typeof LogoutSessionResponseSchema>;
+export type LogoutAllSessionsResponse = z.infer<typeof LogoutAllSessionsResponseSchema>;

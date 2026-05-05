@@ -52,6 +52,28 @@ export interface AuthServiceClient {
 			callback: (error: grpc.ServiceError | null, response: unknown) => void,
 		): grpc.ClientUnaryCall;
 	};
+	LogoutSession: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
+	LogoutAllSessions: grpc.ClientUnaryCall & {
+		(
+			request: unknown,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+		(
+			request: unknown,
+			metadata: grpc.Metadata,
+			callback: (error: grpc.ServiceError | null, response: unknown) => void,
+		): grpc.ClientUnaryCall;
+	};
 	close: () => void;
 }
 
