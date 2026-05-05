@@ -156,6 +156,7 @@ export const GetNoteRequestSchema = z.object({
 });
 
 export const UpdateNoteRequestSchema = z.object({
+  noteId: noteIdSchema,
   title: noteTitleSchema.optional(),
   content: noteContentJsonSchema.optional(),
 }).refine(

@@ -1,11 +1,16 @@
 import * as grpc from "@grpc/grpc-js";
 import { config } from "./config";
+import { createNotesHandlers } from "./service";
+import { getNotesServiceDefinition } from "./serviceDefinition";
 
 export function createGrpcServer(): grpc.Server {
-  return new grpc.Server({
+  const server = new grpc.Server({
     "grpc.max_receive_message_length": 10 * 1024 * 1024,
     "grpc.max_send_message_length": 10 * 1024 * 1024,
   });
+
+  server.addService(getNotesServiceDefinition(), createNotesHandlers());
+  return server;
 }
 
 export async function startGrpcServer(server: grpc.Server): Promise<void> {

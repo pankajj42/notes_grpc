@@ -14,8 +14,8 @@ build/
 *.tsbuildinfo
 
 # Prisma
-**/prisma/migrations/*.sql
-apps/auth-service/src/generated/prisma/
+apps/*/prisma/migrations/
+apps/*/src/generated/prisma/
 
 # OS
 .DS_Store
