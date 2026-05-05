@@ -52,6 +52,70 @@ const noteContentSchema = z
   .min(1, "Content is required")
   .max(50_000, "Content must be at most 50 000 characters");
 
+// Discriminated union for validating content by type
+// This ensures that when contentType is specified, the content JSON matches that shape
+const createTextNoteContent = z.object({
+  contentType: z.literal("TEXT"),
+  content: noteContentSchema,
+}).superRefine((value, ctx) => {
+  const parsed = parseContentJson(value.content);
+  if (!parsed.success) {
+    ctx.addIssue({
+      code: "custom",
+      message: parsed.message,
+      path: ["content"],
+    });
+    return;
+  }
+
+  const result = TextNoteContentSchema.safeParse(parsed.value);
+  if (!result.success) {
+    ctx.addIssue({
+      code: "custom",
+      message: "For TEXT notes, content must be JSON like { text: string }",
+      path: ["content"],
+    });
+  }
+});
+
+const createListNoteContent = z.object({
+  contentType: z.literal("LIST"),
+  content: noteContentSchema,
+}).superRefine((value, ctx) => {
+  const parsed = parseContentJson(value.content);
+  if (!parsed.success) {
+    ctx.addIssue({
+      code: "custom",
+      message: parsed.message,
+      path: ["content"],
+    });
+    return;
+  }
+
+  const result = ListNoteContentSchema.safeParse(parsed.value);
+  if (!result.success) {
+    ctx.addIssue({
+      code: "custom",
+      message: "For LIST notes, content must be JSON like { items: [{ text, checked }] }",
+      path: ["content"],
+    });
+  }
+});
+
+/**
+ * Discriminated union schema for creating notes:
+ * Validates that the content JSON shape matches the declared contentType.
+ * 
+ * Examples:
+ * - contentType: "TEXT" requires content: '{"text": "..."}'
+ * - contentType: "LIST" requires content: '{"items": [{"text": "...", "checked": boolean}]}'
+ */
+export const CreateNoteContentDiscriminatedSchema = z.discriminatedUnion("contentType", [
+  createTextNoteContent,
+  createListNoteContent,
+]);
+
+// For validation of existing content in responses (doesn't include contentType in the object)
 const noteContentJsonSchema = noteContentSchema.superRefine((rawContent, ctx) => {
   const parsed = parseContentJson(rawContent);
   if (!parsed.success) {
@@ -109,38 +173,23 @@ const sortOrderSchema = z
 
 export const CreateNoteRequestSchema = z.object({
   title: noteTitleSchema,
-  content: noteContentSchema,
   contentType: NoteContentTypeSchema,
+  content: noteContentSchema,
 }).superRefine((value, ctx) => {
-  const parsed = parseContentJson(value.content);
-  if (!parsed.success) {
-    ctx.addIssue({
-      code: "custom",
-      message: parsed.message,
-      path: ["content"],
-    });
-    return;
-  }
+  // Use discriminated union validation for content
+  const contentValidation = CreateNoteContentDiscriminatedSchema.safeParse({
+    contentType: value.contentType,
+    content: value.content,
+  });
 
-  if (value.contentType === "TEXT") {
-    const result = TextNoteContentSchema.safeParse(parsed.value);
-    if (!result.success) {
+  if (!contentValidation.success) {
+    for (const error of contentValidation.error.issues) {
       ctx.addIssue({
-        code: "custom",
-        message: "For TEXT notes, content must be JSON like { text: string }",
-        path: ["content"],
+        code: "custom" as const,
+        message: error.message,
+        path: error.path,
       });
     }
-    return;
-  }
-
-  const result = ListNoteContentSchema.safeParse(parsed.value);
-  if (!result.success) {
-    ctx.addIssue({
-      code: "custom",
-      message: "For LIST notes, content must be JSON like { items: [{ text, checked }] }",
-      path: ["content"],
-    });
   }
 });
 
@@ -187,41 +236,26 @@ export const NoteSchema = z
     id: z.uuid("Note ID must be a valid UUID"),
     userId: z.uuid("User ID must be a valid UUID"),
     title: noteTitleSchema,
-    content: noteContentSchema,
     contentType: NoteContentTypeSchema,
+    content: noteContentSchema,
     createdAt: z.iso.datetime({ message: "createdAt must be an ISO datetime" }),
     updatedAt: z.iso.datetime({ message: "updatedAt must be an ISO datetime" }),
   })
   .superRefine((value, ctx) => {
-    const parsed = parseContentJson(value.content);
-    if (!parsed.success) {
-      ctx.addIssue({
-        code: "custom",
-        message: parsed.message,
-        path: ["content"],
-      });
-      return;
-    }
+    // Use discriminated union validation for content
+    const contentValidation = CreateNoteContentDiscriminatedSchema.safeParse({
+      contentType: value.contentType,
+      content: value.content,
+    });
 
-    if (value.contentType === "TEXT") {
-      const result = TextNoteContentSchema.safeParse(parsed.value);
-      if (!result.success) {
+    if (!contentValidation.success) {
+      for (const error of contentValidation.error.issues) {
         ctx.addIssue({
-          code: "custom",
-          message: "For TEXT notes, content must be JSON like { text: string }",
-          path: ["content"],
+          code: "custom" as const,
+          message: error.message,
+          path: error.path,
         });
       }
-      return;
-    }
-
-    const result = ListNoteContentSchema.safeParse(parsed.value);
-    if (!result.success) {
-      ctx.addIssue({
-        code: "custom",
-        message: "For LIST notes, content must be JSON like { items: [{ text, checked }] }",
-        path: ["content"],
-      });
     }
   });
 
