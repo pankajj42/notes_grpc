@@ -212,7 +212,18 @@ async function handleUpdateNote(
       return;
     }
 
-    const parsedRequest = UpdateNoteRequestSchema.safeParse(call.request);
+    const normalizedRequest = {
+      noteId: call.request.noteId,
+      title:
+        typeof call.request.title === "string" && call.request.title.trim() !== ""
+          ? call.request.title
+          : undefined,
+      content:
+        typeof call.request.content === "string" && call.request.content.trim() !== ""
+          ? call.request.content
+          : undefined,
+    };
+    const parsedRequest = UpdateNoteRequestSchema.safeParse(normalizedRequest);
     if (!parsedRequest.success) {
       callback(toGrpcError(ErrorCodes.INVALID_ARGUMENT, firstIssue(parsedRequest.error)));
       return;
@@ -345,10 +356,14 @@ function noteToProto(note: PrismaNote): Note {
     userId: note.userId,
     title: note.title,
     content: JSON.stringify(note.content),
-    contentType: note.contentType as NoteContentType,
+    contentType: dbToProtoContentType(note.contentType) as unknown as NoteContentType,
     createdAt: note.createdAt.toISOString(),
     updatedAt: note.updatedAt.toISOString(),
   };
+}
+
+function dbToProtoContentType(contentType: NoteContentType): 1 | 2 {
+  return contentType === "TEXT" ? 1 : 2;
 }
 
 function toGrpcError(code: ErrorCode, message: string): grpc.ServiceError {

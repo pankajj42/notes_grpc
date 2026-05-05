@@ -22,7 +22,7 @@ export function createAuthRouter(): Router {
 
   router.post("/signup", validate(signupBodySchema), async (req, res, next) => {
     try {
-      const response = await unaryCall<SignupRequest, SignupResponse>("Signup", req.body as SignupRequest);
+      const response = await unaryCall<SignupRequest, SignupResponse>("Signup", res.locals.validated.body as SignupRequest);
       res.status(201).json(successResponse(response));
     } catch (error: unknown) {
       next(toAppError(error));
@@ -31,7 +31,7 @@ export function createAuthRouter(): Router {
 
   router.post("/login", validate(loginBodySchema), async (req, res, next) => {
     try {
-      const response = await unaryCall<LoginRequest, LoginResponse>("Login", req.body as LoginRequest);
+      const response = await unaryCall<LoginRequest, LoginResponse>("Login", res.locals.validated.body as LoginRequest);
       res.status(200).json(successResponse(response));
     } catch (error: unknown) {
       next(toAppError(error));

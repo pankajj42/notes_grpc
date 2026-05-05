@@ -2,8 +2,10 @@ import cors from "cors";
 import express, { type Express } from "express";
 import type { Server } from "node:http";
 import { config } from "./config.js";
+import { authenticate } from "./middleware/authenticate.js";
 import { globalErrorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { createAuthRouter } from "./routes/auth.js";
+import { createNotesRouter } from "./routes/notes.js";
 
 export function createHttpApp(): Express {
   const app = express();
@@ -18,6 +20,7 @@ export function createHttpApp(): Express {
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/auth", createAuthRouter());
+  app.use("/notes", authenticate, createNotesRouter());
 
   app.get("/health", (_req, res) => {
     res.status(200).json({

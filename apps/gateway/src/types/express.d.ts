@@ -8,6 +8,13 @@ declare global {
     interface Request {
       user?: AuthenticatedUser;
     }
+
+    interface Response {
+      locals: {
+        user?: AuthenticatedUser;
+        validated: Record<string, unknown>;
+      };
+    }
   }
 }
 

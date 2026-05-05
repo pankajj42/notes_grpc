@@ -8,7 +8,7 @@ type RequestLocation = "body" | "query" | "params";
  * Returns an Express middleware that validates `req[location]` against
  * the provided Zod schema.
  *
- * On success the validated (and coerced) data replaces the original value.
+ * On success the validated (and coerced) data is stored in `res.locals.validated[location]`.
  * On failure a structured 400 response is sent immediately.
  */
 export function validate(
@@ -31,8 +31,8 @@ export function validate(
       return;
     }
 
-    // Replace with parsed (coerced + defaulted) value
-    (req as unknown as Record<string, unknown>)[location] = result.data;
+    res.locals.validated = res.locals.validated || {};
+    res.locals.validated[location] = result.data;
     next();
   };
 }
