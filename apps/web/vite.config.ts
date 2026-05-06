@@ -9,4 +9,29 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) {
+            return undefined;
+          }
+
+          if (id.includes("@mui") || id.includes("@emotion")) {
+            return "mui-vendor";
+          }
+
+          if (id.includes("@tanstack")) {
+            return "tanstack-vendor";
+          }
+
+          if (id.includes("zod") || id.includes("axios") || id.includes("zustand")) {
+            return "core-vendor";
+          }
+
+          return "vendor";
+        },
+      },
+    },
+  },
 });

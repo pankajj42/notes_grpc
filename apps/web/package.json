@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "clean": "rimraf dist node_modules",
-    "dev": "vite",
+    "dev": "node ./scripts/dev.mjs",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "preview": "vite preview",

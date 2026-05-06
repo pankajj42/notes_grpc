@@ -4,10 +4,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { logoutCurrentSession } from "../lib/api/authApi";
 import { AppFrame } from "../components/layout/AppFrame";
-import { NotesPanel } from "../features/notes/components/NotesPanel";
-import { SessionsPanel } from "../features/sessions/components/SessionsPanel";
+import { NotesPanel } from "../features/notes";
+import { SessionsPanel } from "../features/sessions";
 import { isAuthenticated, useAuthStore } from "../store/authStore";
 import { useToast } from "../app/ToastProvider";
+import { getApiErrorMessage } from "../lib/api/http";
 
 type AppTab = "notes" | "sessions";
 
@@ -30,9 +31,9 @@ export function AppPage() {
       showToast("Logged out", "success");
       void navigate({ to: "/" });
     },
-    onError: () => {
+    onError: (error) => {
       clearAuth();
-      showToast("Session cleared locally", "warning");
+      showToast(getApiErrorMessage(error, "Session cleared locally"), "warning");
       void navigate({ to: "/" });
     },
   });

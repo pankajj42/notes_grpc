@@ -1,13 +1,16 @@
 import { Box, CircularProgress } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/router-devtools";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from "react";
 import { router } from "./router";
 import { ThemeModeProvider } from "../theme/ThemeModeProvider";
 import { refreshSession } from "../lib/api/authApi";
 import { useAuthStore } from "../store/authStore";
 import { ToastProvider } from "./ToastProvider";
+
+const RouterDevtools = import.meta.env.DEV
+  ? lazy(async () => import("@tanstack/router-devtools").then((module) => ({ default: module.TanStackRouterDevtools })))
+  : null;
 
 function AuthBootstrapGate({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -66,7 +69,11 @@ export function AppProviders() {
           <AuthBootstrapGate>
             <RouterProvider router={router} />
           </AuthBootstrapGate>
-          <TanStackRouterDevtools router={router} />
+          {RouterDevtools != null ? (
+            <Suspense fallback={null}>
+              <RouterDevtools router={router} />
+            </Suspense>
+          ) : null}
         </QueryClientProvider>
       </ToastProvider>
     </ThemeModeProvider>

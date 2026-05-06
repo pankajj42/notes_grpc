@@ -1,7 +1,5 @@
 import {
   Alert,
-  Box,
-  Chip,
   IconButton,
   MenuItem,
   Paper,
@@ -15,8 +13,6 @@ import {
   AddRounded,
   ArrowDownwardRounded,
   ArrowUpwardRounded,
-  DeleteRounded,
-  EditRounded,
   RefreshRounded,
 } from "@mui/icons-material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,8 +20,6 @@ import { useMemo, useState } from "react";
 import {
   type NoteContentType,
   CreateNoteRequestSchema,
-  ListNoteContentSchema,
-  TextNoteContentSchema,
   UpdateNoteRequestSchema,
 } from "@notes/shared-types";
 import { createNote, deleteNote, getNote, getNotes, updateNote } from "../../../lib/api/notesApi";
@@ -33,6 +27,16 @@ import { queryKeys } from "../../../lib/queryKeys";
 import { NoteEditorDialog } from "./NoteEditorDialog";
 import { useToast } from "../../../app/ToastProvider";
 import { getApiErrorMessage } from "../../../lib/api/http";
+import { parseNoteContent } from "../utils/parseNoteContent";
+import { NoteDetailsPanel } from "./NoteDetailsPanel";
+import { NotesListPanel } from "./NotesListPanel";
+import {
+  addButtonSx,
+  iconHoverLiftSx,
+  notesHeaderPaperSx,
+  notesHeaderStackSx,
+  sortSelectSx,
+} from "./notesStyles";
 
 type SortBy = "createdAt" | "updatedAt" | "title";
 type SortOrder = "asc" | "desc";
@@ -96,11 +100,11 @@ export function NotesPanel() {
 
       return { previous };
     },
-    onError: (_error, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previous != null) {
         queryClient.setQueryData(notesQueryKey, context.previous);
       }
-      showToast("Failed to create note", "error");
+      showToast(getApiErrorMessage(error, "Failed to create note"), "error");
     },
     onSuccess: () => {
       showToast("Note created", "success");
@@ -134,11 +138,11 @@ export function NotesPanel() {
 
       return { previous };
     },
-    onError: (_error, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previous != null) {
         queryClient.setQueryData(notesQueryKey, context.previous);
       }
-      showToast("Failed to update note", "error");
+      showToast(getApiErrorMessage(error, "Failed to update note"), "error");
     },
     onSuccess: async (note) => {
       showToast("Note updated", "success");
@@ -172,11 +176,11 @@ export function NotesPanel() {
 
       return { previous };
     },
-    onError: (_error, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previous != null) {
         queryClient.setQueryData(notesQueryKey, context.previous);
       }
-      showToast("Failed to delete note", "error");
+      showToast(getApiErrorMessage(error, "Failed to delete note"), "error");
     },
     onSuccess: async () => {
       showToast("Note deleted", "success");
@@ -191,26 +195,7 @@ export function NotesPanel() {
       return undefined;
     }
 
-    try {
-      const parsed = JSON.parse(selectedNote.content) as unknown;
-      if (selectedNote.contentType === "TEXT") {
-        const result = TextNoteContentSchema.safeParse(parsed);
-        if (result.success) {
-          return { kind: "text" as const, text: result.data.text };
-        }
-      }
-
-      if (selectedNote.contentType === "LIST") {
-        const result = ListNoteContentSchema.safeParse(parsed);
-        if (result.success) {
-          return { kind: "list" as const, items: result.data.items };
-        }
-      }
-    } catch {
-      return { kind: "invalid" as const, raw: selectedNote.content };
-    }
-
-    return { kind: "invalid" as const, raw: selectedNote.content };
+    return parseNoteContent(selectedNote);
   }, [selectedNote]);
   const notes = notesQuery.data?.notes ?? [];
   const hasNotes = notes.length > 0;
@@ -258,8 +243,8 @@ export function NotesPanel() {
 
   return (
     <Stack spacing={2}>
-      <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { xs: "stretch", sm: "center" } }}>
+      <Paper elevation={0} sx={notesHeaderPaperSx}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={notesHeaderStackSx}>
           {hasNotes ? (
             <Typography variant="h6" sx={{ flexGrow: 1 }}>
               Notes
@@ -286,7 +271,7 @@ export function NotesPanel() {
                     </Stack>
                   );
                 }}
-                sx={{ minWidth: 150, transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}
+                sx={sortSelectSx}
               >
                 {(["createdAt", "updatedAt", "title"] as const).map((field) => {
                   const selected = sortBy === field;
@@ -326,7 +311,7 @@ export function NotesPanel() {
             <IconButton
               color="primary"
               onClick={openCreate}
-              sx={{ bgcolor: "primary.main", color: "primary.contrastText", transition: "all 0.2s ease", "&:hover": { bgcolor: "primary.dark", transform: "translateY(-1px)" } }}
+              sx={addButtonSx}
             >
               <AddRounded />
             </IconButton>
@@ -337,7 +322,7 @@ export function NotesPanel() {
               onClick={() => {
                 void notesQuery.refetch();
               }}
-              sx={{ transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}
+              sx={iconHoverLiftSx}
             >
               <RefreshRounded />
             </IconButton>
@@ -348,119 +333,26 @@ export function NotesPanel() {
       {notesQuery.isError ? <Alert severity="error">{getApiErrorMessage(notesQuery.error, "Failed to fetch notes.")}</Alert> : null}
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <Paper elevation={0} sx={{ borderRadius: 3, p: 1, flex: 1 }}>
-          <Stack spacing={1}>
-            {notes.map((note) => (
-              <Paper
-                key={note.id}
-                elevation={0}
-                onClick={() => {
-                  setSelectedNoteId(note.id);
-                }}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  border: (theme) => `1px solid ${theme.palette.divider}`,
-                  bgcolor: selectedNoteId === note.id ? "action.selected" : "background.paper",
-                  "&:hover": { transform: "translateY(-1px)", bgcolor: "action.hover" },
-                }}
-              >
-                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography sx={{ fontWeight: 600 }}>{note.title}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {new Date(note.updatedAt).toLocaleString()}
-                    </Typography>
-                  </Box>
-                  <Chip label={note.contentType} size="small" />
-                  <Tooltip title="Edit note">
-                    <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(note.id); }} sx={{ "&:hover": { bgcolor: "action.hover" } }}>
-                      <EditRounded fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Delete note">
-                    <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(note.id); }} sx={{ "&:hover": { bgcolor: "error.lighter" } }}>
-                      <DeleteRounded fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Paper>
-            ))}
-            {!hasNotes ? (
-              <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
-                No notes yet. Create your first note to get started.
-              </Typography>
-            ) : (
-              <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
-                Page {notesQuery.data?.pagination.page ?? 1} of {notesQuery.data?.pagination.totalPages ?? 1}
-              </Typography>
-            )}
-          </Stack>
-        </Paper>
+        <NotesListPanel
+          notes={notes}
+          selectedNoteId={selectedNoteId}
+          page={notesQuery.data?.pagination.page ?? 1}
+          totalPages={notesQuery.data?.pagination.totalPages ?? 1}
+          onSelect={setSelectedNoteId}
+          onEdit={openEdit}
+          onDelete={(noteId) => {
+            deleteMutation.mutate(noteId);
+          }}
+        />
 
-        { hasNotes ? (
-          <Paper elevation={0} sx={{ borderRadius: 3, p: 2, flex: 1 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>Note detail</Typography>
-            {selectedNoteQuery.isLoading ? <Typography color="text.secondary">Loading note...</Typography> : null}
-            {selectedNoteQuery.isError ? <Alert severity="error">{getApiErrorMessage(selectedNoteQuery.error, "Failed to load note details.")}</Alert> : null}
-            {selectedNote == null ? <Typography color="text.secondary">Select a note to view full details.</Typography> : null}
-            {selectedNote != null ? (
-              <Stack spacing={1}>
-                <Typography sx={{ fontWeight: 700 }}>{selectedNote.title}</Typography>
-                <Chip label={selectedNote.contentType} size="small" sx={{ width: "fit-content" }} />
-                <Paper elevation={0} sx={{ p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
-                  {selectedNoteContent?.kind === "text" ? (
-                    <Box sx={{ maxHeight: 300, overflowY: "auto", pr: 0.5 }}>
-                      <Typography sx={{ whiteSpace: "pre-wrap" }}>
-                        {selectedNoteContent.text}
-                      </Typography>
-                    </Box>
-                  ) : null}
-
-                  {selectedNoteContent?.kind === "list" ? (
-                    <Box sx={{ maxHeight: 300, overflowY: "auto", pr: 0.5 }}>
-                      {selectedNoteContent.items.length === 0 ? (
-                        <Typography color="text.secondary">No list items.</Typography>
-                      ) : (
-                        <Stack spacing={0.75}>
-                          {selectedNoteContent.items.map((item, index) => (
-                            <Stack key={`${selectedNote.id}-item-${String(index)}`} direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                              <ToggleButton
-                                value={`item-${String(index)}`}
-                                selected={item.checked}
-                                disabled
-                                size="small"
-                                sx={{ minWidth: 34, width: 34, height: 34, p: 0, borderRadius: 1.5 }}
-                              >
-                                {item.checked ? "✓" : ""}
-                              </ToggleButton>
-                              <Typography sx={{ textDecoration: item.checked ? "line-through" : "none", color: item.checked ? "text.secondary" : "text.primary" }}>
-                                {item.text}
-                              </Typography>
-                            </Stack>
-                          ))}
-                        </Stack>
-                      )}
-                    </Box>
-                  ) : null}
-
-                  {selectedNoteContent?.kind === "invalid" ? (
-                    <Box sx={{ maxHeight: 300, overflowY: "auto", pr: 0.5 }}>
-                      <Alert severity="warning" sx={{ mb: 1 }}>
-                        Could not parse note content. Showing raw text.
-                      </Alert>
-                      <Typography sx={{ whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
-                        {selectedNoteContent.raw}
-                      </Typography>
-                    </Box>
-                  ) : null}
-                </Paper>
-              </Stack>
-            ) : null}
-          </Paper>
-      ) : null}
+        {hasNotes ? (
+          <NoteDetailsPanel
+            selectedNote={selectedNote}
+            selectedNoteContent={selectedNoteContent}
+            isLoading={selectedNoteQuery.isLoading}
+            errorMessage={selectedNoteQuery.isError ? getApiErrorMessage(selectedNoteQuery.error, "Failed to load note details.") : undefined}
+          />
+        ) : null}
       </Stack>
 
       <NoteEditorDialog

@@ -104,6 +104,7 @@ export function parseSuccessEnvelope<T>(
 export function getApiErrorMessage(error: unknown, fallback = "Request failed"): string {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
+    const requestUrl = error.config?.url ?? "";
 
     if (error.code === "ECONNABORTED") {
       return "Request timed out. Please check your connection and try again.";
@@ -126,7 +127,22 @@ export function getApiErrorMessage(error: unknown, fallback = "Request failed"):
     }
 
     if (status === 401) {
+      if (requestUrl.includes("/auth/login")) {
+        return "Incorrect email or password.";
+      }
       return "Your session expired. Please sign in again.";
+    }
+
+    if (status === 403) {
+      return "You do not have permission to perform this action.";
+    }
+
+    if (status === 404) {
+      return "Requested resource was not found.";
+    }
+
+    if (status === 429) {
+      return "Too many requests. Please wait and try again.";
     }
 
     if (typeof error.message === "string" && error.message.trim().length > 0 && error.message !== "Network Error") {

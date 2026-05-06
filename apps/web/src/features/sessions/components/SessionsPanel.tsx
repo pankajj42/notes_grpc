@@ -1,19 +1,20 @@
 import {
   Alert,
   Button,
-  Chip,
   IconButton,
   Paper,
   Stack,
   Typography,
 } from "@mui/material";
-import { DeleteRounded, RefreshRounded } from "@mui/icons-material";
+import { RefreshRounded } from "@mui/icons-material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listSessions, logoutAllSessions, revokeSession } from "../../../lib/api/authApi";
 import { queryKeys } from "../../../lib/queryKeys";
 import { useAuthStore } from "../../../store/authStore";
 import { useToast } from "../../../app/ToastProvider";
 import { getApiErrorMessage } from "../../../lib/api/http";
+import { SessionCard } from "./SessionCard";
+import { sessionsHeaderPaperSx, sessionsHeaderRowSx } from "./sessionStyles";
 
 export function SessionsPanel() {
   const queryClient = useQueryClient();
@@ -35,11 +36,11 @@ export function SessionsPanel() {
       );
       return { previous };
     },
-    onError: (_error, _vars, context) => {
+    onError: (error, _vars, context) => {
       if (context?.previous != null) {
         queryClient.setQueryData(queryKeys.sessions, context.previous);
       }
-      showToast("Failed to revoke session", "error");
+      showToast(getApiErrorMessage(error, "Failed to revoke session"), "error");
     },
     onSuccess: async () => {
       showToast("Session revoked", "success");
@@ -73,8 +74,8 @@ export function SessionsPanel() {
 
   return (
     <Stack spacing={2}>
-      <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3 }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { xs: "stretch", sm: "center" } }}>
+      <Paper elevation={0} sx={sessionsHeaderPaperSx}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={sessionsHeaderRowSx}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             Active sessions
           </Typography>
@@ -100,40 +101,13 @@ export function SessionsPanel() {
       {sessionsQuery.isError ? <Alert severity="error">{getApiErrorMessage(sessionsQuery.error, "Unable to load sessions.")}</Alert> : null}
 
       {(sessionsQuery.data ?? []).map((session) => (
-        <Paper
+        <SessionCard
           key={session.sessionId}
-          elevation={0}
-          sx={{
-            p: 2,
-            borderRadius: 3,
-            border: session.isCurrent ? "2px solid" : "1px solid",
-            borderColor: session.isCurrent ? "primary.main" : "divider",
-            bgcolor: session.isCurrent ? "primary.50" : "background.paper",
+          session={session}
+          onRevoke={(sessionId) => {
+            revokeMutation.mutate(sessionId);
           }}
-        >
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <Stack sx={{ flexGrow: 1 }}>
-              <Typography sx={{ fontWeight: 700 }}>{session.deviceName}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Created: {new Date(session.createdAt).toLocaleString()}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Last activity: {new Date(session.lastActivityAt).toLocaleString()}
-              </Typography>
-            </Stack>
-            {session.isCurrent ? <Chip label="Current" color="primary" size="small" /> : null}
-            {!session.isCurrent ? (
-              <IconButton
-                color="error"
-                onClick={() => {
-                  revokeMutation.mutate(session.sessionId);
-                }}
-              >
-                <DeleteRounded />
-              </IconButton>
-            ) : null}
-          </Stack>
-        </Paper>
+        />
       ))}
     </Stack>
   );

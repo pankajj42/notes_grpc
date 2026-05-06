@@ -6,7 +6,6 @@
   "main": "index.js",
   "scripts": {
     "clean": "rimraf dist node_modules src/generated/prisma",
-    "predev": "pnpm --filter @notes/shared-types run build",
     "dev": "tsx watch src/index.ts",
     "prebuild": "pnpm --filter @notes/shared-types run build",
     "build": "tsc -p tsconfig.json",

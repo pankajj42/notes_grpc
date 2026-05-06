@@ -11,12 +11,14 @@ import {
 } from "@mui/material";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
-import { UAParser } from "ua-parser-js";
+import { useEffect, useMemo, useState } from "react";
 import { LoginRequestSchema, SignupRequestSchema } from "@notes/shared-types";
 import { login, signup } from "../../../lib/api/authApi";
 import { useAuthStore } from "../../../store/authStore";
 import { useToast } from "../../../app/ToastProvider";
+import { getApiErrorMessage } from "../../../lib/api/http";
+import { getDeviceName } from "../utils/deviceName";
+import { hoverLiftSx, interactiveOutlinedInputSx, toggleGroupSx } from "./authFormStyles";
 
 type Mode = "login" | "signup";
 
@@ -27,14 +29,6 @@ type FormErrors = {
   root?: string;
 };
 
-function generateDeviceName(): string {
-  const parser = new UAParser();
-  const result = parser.getResult();
-  const browser = result.browser.name || "Browser";
-  const os = result.os.name || "Unknown OS";
-  return `${browser} on ${os}`;
-}
-
 export function AuthForm() {
   const navigate = useNavigate();
   const { setAuthSession } = useAuthStore();
@@ -43,8 +37,22 @@ export function AuthForm() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [deviceName, setDeviceName] = useState(generateDeviceName);
+  const [deviceName, setDeviceName] = useState("Current device");
   const [errors, setErrors] = useState<FormErrors>({});
+
+  useEffect(() => {
+    let active = true;
+
+    void getDeviceName().then((name) => {
+      if (active) {
+        setDeviceName(name);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const schema = useMemo(() => (mode === "login" ? LoginRequestSchema : SignupRequestSchema), [mode]);
 
@@ -65,7 +73,7 @@ export function AuthForm() {
       void navigate({ to: "/app" });
     },
     onError: (error) => {
-      const message = error instanceof Error ? error.message : "Authentication failed";
+      const message = getApiErrorMessage(error, "Authentication failed");
       setErrors((previous) => ({ ...previous, root: message }));
       showToast(message, "error");
     },
@@ -109,7 +117,7 @@ export function AuthForm() {
             }
           }}
           fullWidth
-          sx={{ "& .MuiToggleButton-root": { transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } } }}
+          sx={toggleGroupSx}
         >
           <ToggleButton value="login">Login</ToggleButton>
           <ToggleButton value="signup">Sign Up</ToggleButton>
@@ -125,7 +133,7 @@ export function AuthForm() {
           }}
           error={errors.email !== undefined}
           helperText={errors.email}
-          sx={{ "& .MuiOutlinedInput-root": { transition: "all 0.2s ease", "&:hover fieldset": { borderColor: "primary.main" } } }}
+          sx={interactiveOutlinedInputSx}
           fullWidth
         />
         <TextField
@@ -138,7 +146,7 @@ export function AuthForm() {
           }}
           error={errors.password !== undefined}
           helperText={errors.password}
-          sx={{ "& .MuiOutlinedInput-root": { transition: "all 0.2s ease", "&:hover fieldset": { borderColor: "primary.main" } } }}
+          sx={interactiveOutlinedInputSx}
           fullWidth
         />
         <TextField
@@ -149,7 +157,7 @@ export function AuthForm() {
           }}
           error={errors.deviceName !== undefined}
           helperText={errors.deviceName ?? "Used to identify this device in sessions"}
-          sx={{ "& .MuiOutlinedInput-root": { transition: "all 0.2s ease", "&:hover fieldset": { borderColor: "primary.main" } } }}
+          sx={interactiveOutlinedInputSx}
           fullWidth
         />
 
@@ -162,7 +170,7 @@ export function AuthForm() {
             size="large"
             fullWidth
             disabled={mutation.isPending}
-            sx={{ transition: "all 0.2s ease", "&:hover": { transform: "translateY(-1px)" } }}
+            sx={hoverLiftSx}
           >
             {mutation.isPending ? "Please wait..." : mode === "login" ? "Login" : "Create account"}
           </Button>

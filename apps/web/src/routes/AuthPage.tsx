@@ -1,7 +1,7 @@
 import { Box, Container, Paper, Stack, Typography } from "@mui/material";
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { AuthForm } from "../features/auth/components/AuthForm";
+import { AuthForm } from "../features/auth";
 import { isAuthenticated } from "../store/authStore";
 
 export function AuthPage() {
@@ -30,12 +30,13 @@ export function AuthPage() {
             Welcome to Notes
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 2 }}>
-            A clean collaboration-inspired workspace for secure auth, notes, and session control.
+            A clean workspace for secure auth, notes, and session control.
           </Typography>
           <Box sx={{ display: "grid", gap: 1 }}>
             <Typography variant="body2">• RS256 access tokens and refresh rotation</Typography>
             <Typography variant="body2">• Mobile-first notes editor for TEXT and LIST notes</Typography>
             <Typography variant="body2">• Per-device session management and revocation</Typography>
+            <Typography variant="body2">• Service based architecture using gRPC</Typography>
           </Box>
         </Paper>
         <Box sx={{ flex: 1 }}>

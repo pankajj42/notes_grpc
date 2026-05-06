@@ -30,6 +30,8 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
+      "apps/web/scripts/**",
+      "scripts/**",
     ],
   }
 );
