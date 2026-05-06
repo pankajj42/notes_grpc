@@ -154,13 +154,13 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
                 multiline
                 minRows={6}
                 error={contentError !== undefined}
-                helperText={contentError ?? "Saved as JSON: { text: string }"}
+                helperText={contentError ? "Content is required" : undefined}
                 sx={interactiveTextFieldSx}
               />
             ) : (
               <ListItemsEditor
                 items={listItems}
-                error={contentError}
+                error={contentError ? "List cannot be empty" : undefined}
                 onTextChange={updateListText}
                 onCheckedChange={updateListChecked}
                 onRemove={removeListItem}
