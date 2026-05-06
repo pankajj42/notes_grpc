@@ -13,7 +13,7 @@ export const refreshRateLimiter = rateLimit({
       const parsed = parseRefreshToken(cookie);
       if (parsed != null) return parsed.sessionId;
     }
-    return req.ip ?? "unknown";
+    return "unauthenticated";
   },
   handler: (_req, res) => {
     res.status(429).json({ status: "error", code: "RATE_LIMITED", message: "Too many refresh attempts. Try again later." });
@@ -25,7 +25,6 @@ export const signupRateLimiter = rateLimit({
   limit: 20,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip ?? "unknown",
   handler: (_req, res) => {
     res.status(429).json({ status: "error", code: "RATE_LIMITED", message: "Too many signup attempts. Try again later." });
   },
@@ -36,7 +35,6 @@ export const loginRateLimiter = rateLimit({
   limit: 15,
   standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip ?? "unknown",
   handler: (_req, res) => {
     res.status(429).json({ status: "error", code: "RATE_LIMITED", message: "Too many login attempts. Try again later." });
   },

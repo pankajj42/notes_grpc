@@ -37,7 +37,7 @@ const sessionIdParamsSchema = z.object({ id: sessionIdSchema });
 type AuthServiceClient = ReturnType<typeof createAuthServiceClient>;
 
 type HttpAuthPayload = {
-  tokens: { accessToken: string };
+  tokens: { accessToken: string; refreshToken: string };
   user: SignupResponse["user"];
 };
 
@@ -163,7 +163,7 @@ function callAuth<TResponse>(
 
 function toHttpAuthPayload(response: SignupResponse | LoginResponse): HttpAuthPayload {
   return {
-    tokens: { accessToken: response.tokens.accessToken },
+    tokens: { accessToken: response.tokens.accessToken, refreshToken: response.tokens.refreshToken },
     user: response.user,
   };
 }
