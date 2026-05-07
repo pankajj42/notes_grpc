@@ -35,8 +35,8 @@ async function seedForUser(userId: string, noteCount: number): Promise<void> {
     const isList = index % 3 === 0;
 
     const content = isList
-      ? JSON.stringify({ items: longListItems(index === 0 ? 45 : 8) })
-      : JSON.stringify({ text: longText(index === 1 ? 18 : 3) });
+      ? { items: longListItems(index === 0 ? 45 : 8) }
+      : { text: longText(index === 1 ? 18 : 3) };
 
     await prisma.note.create({
       data: {

@@ -13,8 +13,8 @@
     }
   },
   "scripts": {
-    "clean": "rimraf dist node_modules",
-    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist tsconfig.tsbuildinfo node_modules",
+    "build": "rimraf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
