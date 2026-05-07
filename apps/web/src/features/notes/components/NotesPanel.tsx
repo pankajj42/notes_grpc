@@ -45,7 +45,7 @@ export function NotesPanel() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const [page] = useState(1);
+  const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [sortBy, setSortBy] = useState<SortBy>("createdAt");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
@@ -203,10 +203,12 @@ export function NotesPanel() {
   const handleSortSelection = (field: SortBy) => {
     if (field === sortBy) {
       setSortOrder((previous) => (previous === "asc" ? "desc" : "asc"));
+      setPage(1);
       return;
     }
     setSortBy(field);
     setSortOrder("desc");
+    setPage(1);
   };
 
   const sortArrow = sortOrder === "asc" ? <ArrowUpwardRounded fontSize="small" /> : <ArrowDownwardRounded fontSize="small" />;
@@ -342,6 +344,9 @@ export function NotesPanel() {
           onEdit={openEdit}
           onDelete={(noteId) => {
             deleteMutation.mutate(noteId);
+          }}
+          onPageChange={(newPage) => {
+            setPage(newPage);
           }}
         />
 

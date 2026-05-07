@@ -32,6 +32,11 @@ export function NoteDetailsPanel({ selectedNote, selectedNoteContent, isLoading,
 
             {selectedNoteContent?.kind === "list" ? (
               <Box sx={noteContentBoxSx}>
+                {selectedNoteContent.moveCheckedToEnd ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.75 }}>
+                    ✓ Checked items to end
+                  </Typography>
+                ) : null}
                 {selectedNoteContent.items.length === 0 ? (
                   <Typography color="text.secondary">No list items.</Typography>
                 ) : (

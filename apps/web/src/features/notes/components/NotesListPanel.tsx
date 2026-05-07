@@ -1,4 +1,4 @@
-import { Chip, IconButton, Paper, Stack, Tooltip, Typography } from "@mui/material";
+import { Chip, IconButton, Pagination, Paper, Stack, Tooltip, Typography } from "@mui/material";
 import { DeleteRounded, EditRounded } from "@mui/icons-material";
 import type { Note } from "@notes/shared-types";
 import { getNoteListItemSx, notesListContainerSx } from "./notesStyles";
@@ -11,6 +11,7 @@ type NotesListPanelProps = {
   onSelect: (noteId: string) => void;
   onEdit: (noteId: string) => void;
   onDelete: (noteId: string) => void;
+  onPageChange: (page: number) => void;
 };
 
 export function NotesListPanel({
@@ -21,6 +22,7 @@ export function NotesListPanel({
   onSelect,
   onEdit,
   onDelete,
+  onPageChange,
 }: NotesListPanelProps) {
   const hasNotes = notes.length > 0;
 
@@ -57,15 +59,31 @@ export function NotesListPanel({
             </Stack>
           </Paper>
         ))}
+
         {!hasNotes ? (
           <Typography variant="body2" color="text.secondary" sx={{ px: 1 }}>
             No notes yet. Create your first note to get started.
           </Typography>
-        ) : (
-          <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
-            Page {page} of {totalPages}
-          </Typography>
-        )}
+        ) : null}
+
+        {totalPages > 1 ? (
+          <Stack sx={{ alignItems: "center", pt: 0.5 }}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_event, value) => {
+                onPageChange(value);
+              }}
+              size="small"
+              shape="rounded"
+              showFirstButton
+              showLastButton
+              siblingCount={1}
+              boundaryCount={1}
+              sx={{ "& .MuiPagination-ul": { flexWrap: "wrap", justifyContent: "center" } }}
+            />
+          </Stack>
+        ) : null}
       </Stack>
     </Paper>
   );

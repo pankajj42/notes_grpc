@@ -24,7 +24,7 @@ export function validateContentShape(
 
   const result = ListNoteContentSchema.safeParse(parsed);
   if (!result.success) {
-    return { success: false, message: "For LIST notes, content must be JSON like { items: [{ text, checked }] }" };
+    return { success: false, message: "For LIST notes, content must be JSON like { items: [{ text, checked }], moveCheckedToEnd: boolean }" };
   }
   return { success: true };
 }

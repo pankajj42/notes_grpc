@@ -28,14 +28,25 @@ function longListItems(count: number) {
   }));
 }
 
+function applyMoveCheckedToEndSeedOrder(items: Array<{ text: string; checked: boolean }>) {
+  const unchecked = items.filter((item) => !item.checked);
+  const checked = items.filter((item) => item.checked);
+  return [...unchecked, ...checked];
+}
+
 async function seedForUser(userId: string, noteCount: number): Promise<void> {
   await prisma.note.deleteMany({ where: { userId } });
 
   for (let index = 0; index < noteCount; index += 1) {
     const isList = index % 3 === 0;
+    const moveCheckedToEnd = isList && index % 9 === 0;
+    const listItems = longListItems(index === 0 ? 45 : 8);
 
     const content = isList
-      ? { items: longListItems(index === 0 ? 45 : 8) }
+      ? {
+        items: moveCheckedToEnd ? applyMoveCheckedToEndSeedOrder(listItems) : listItems,
+        moveCheckedToEnd,
+      }
       : { text: longText(index === 1 ? 18 : 3) };
 
     await prisma.note.create({
@@ -51,9 +62,9 @@ async function seedForUser(userId: string, noteCount: number): Promise<void> {
 
 async function main(): Promise<void> {
   // User 1 gets 25 notes so pagination can be validated across multiple pages.
-  await seedForUser(SEEDED_USER_IDS[0], 25);
+  await seedForUser(SEEDED_USER_IDS[0], 250);
   await seedForUser(SEEDED_USER_IDS[1], 10);
-  await seedForUser(SEEDED_USER_IDS[2], 6);
+  await seedForUser(SEEDED_USER_IDS[2], 65);
 
   console.log("Seeded notes database with multi-page and long-content data");
 }

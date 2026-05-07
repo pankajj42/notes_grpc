@@ -6,7 +6,7 @@ import {
 
 export type ParsedNoteContent =
   | { kind: "text"; text: string }
-  | { kind: "list"; items: Array<{ text: string; checked: boolean }> }
+  | { kind: "list"; items: Array<{ text: string; checked: boolean }>; moveCheckedToEnd: boolean }
   | { kind: "invalid"; raw: string };
 
 export function parseNoteContent(note: Note): ParsedNoteContent {
@@ -23,7 +23,7 @@ export function parseNoteContent(note: Note): ParsedNoteContent {
     if (note.contentType === "LIST") {
       const result = ListNoteContentSchema.safeParse(parsed);
       if (result.success) {
-        return { kind: "list", items: result.data.items };
+        return { kind: "list", items: result.data.items, moveCheckedToEnd: result.data.moveCheckedToEnd };
       }
     }
   } catch {

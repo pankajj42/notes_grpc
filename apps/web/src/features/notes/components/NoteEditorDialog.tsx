@@ -9,6 +9,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from "@mui/material";
+import { arrayMove } from "@dnd-kit/sortable";
 import { useEffect, useState } from "react";
 import {
   type Note,
@@ -18,8 +19,11 @@ import {
 import { ListItemsEditor } from "./ListItemsEditor";
 import { hoverLiftToggleButtonsSx, interactiveTextFieldSx } from "./noteEditorStyles";
 import {
-  EMPTY_LIST_ITEM,
+  applyMoveCheckedToEnd,
+  applyMoveCheckedToEndToggle,
   getInitialEditorState,
+  isMoveCheckedToEndOrderValid,
+  makeEmptyListItem,
   serializeEditorContent,
   withDraftRow,
   type EditableListItem,
@@ -46,7 +50,8 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
   const [title, setTitle] = useState("");
   const [contentType, setContentType] = useState<NoteContentType>("TEXT");
   const [textContent, setTextContent] = useState("");
-  const [listItems, setListItems] = useState<EditableListItem[]>([{ ...EMPTY_LIST_ITEM }]);
+  const [listItems, setListItems] = useState<EditableListItem[]>([makeEmptyListItem()]);
+  const [moveCheckedToEnd, setMoveCheckedToEnd] = useState(false);
   const [titleError, setTitleError] = useState<string | undefined>();
   const [contentError, setContentError] = useState<string | undefined>();
 
@@ -60,6 +65,7 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
     setContentType(initialState.contentType);
     setTextContent(initialState.textContent);
     setListItems(initialState.listItems);
+    setMoveCheckedToEnd(initialState.moveCheckedToEnd);
     setTitleError(undefined);
     setContentError(undefined);
   }, [mode, note, open]);
@@ -67,12 +73,22 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
   const updateListText = (index: number, value: string) => {
     setListItems((previous) => {
       const next = previous.map((item, itemIndex) => (itemIndex === index ? { ...item, text: value } : item));
-      return withDraftRow(next);
+      const nextWithDraft = withDraftRow(next);
+      if (moveCheckedToEnd && !isMoveCheckedToEndOrderValid(nextWithDraft)) {
+        setMoveCheckedToEnd(false);
+      }
+      return nextWithDraft;
     });
   };
 
   const updateListChecked = (index: number, checked: boolean) => {
-    setListItems((previous) => previous.map((item, itemIndex) => (itemIndex === index ? { ...item, checked } : item)));
+    setListItems((previous) => {
+      const updated = previous.map((item, itemIndex) => (itemIndex === index ? { ...item, checked } : item));
+      if (moveCheckedToEnd) {
+        return applyMoveCheckedToEnd(updated, index, checked);
+      }
+      return updated;
+    });
   };
 
   const removeListItem = (index: number) => {
@@ -82,11 +98,28 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
     });
   };
 
+  const reorderListItems = (oldIndex: number, newIndex: number) => {
+    setListItems((previous) => {
+      const next = arrayMove(previous, oldIndex, newIndex);
+      if (moveCheckedToEnd && !isMoveCheckedToEndOrderValid(next)) {
+        setMoveCheckedToEnd(false);
+      }
+      return next;
+    });
+  };
+
+  const handleMoveCheckedToEndChange = (value: boolean) => {
+    setMoveCheckedToEnd(value);
+    if (value) {
+      setListItems((previous) => applyMoveCheckedToEndToggle(previous));
+    }
+  };
+
   const submit = () => {
     setTitleError(undefined);
     setContentError(undefined);
 
-    const content = serializeEditorContent({ contentType, textContent, listItems });
+    const content = serializeEditorContent({ contentType, textContent, listItems, moveCheckedToEnd });
 
     const validation = CreateNoteRequestSchema.safeParse({
       title,
@@ -153,17 +186,27 @@ export function NoteEditorDialog({ open, mode, note, onClose, onSubmit, loading 
                 fullWidth
                 multiline
                 minRows={6}
+                maxRows={16}
                 error={contentError !== undefined}
                 helperText={contentError ? "Content is required" : undefined}
-                sx={interactiveTextFieldSx}
+                sx={{
+                  ...interactiveTextFieldSx,
+                  "& .MuiInputBase-inputMultiline": {
+                    overflowY: "auto !important",
+                    maxHeight: 320,
+                  },
+                }}
               />
             ) : (
               <ListItemsEditor
                 items={listItems}
+                moveCheckedToEnd={moveCheckedToEnd}
                 error={contentError ? "List cannot be empty" : undefined}
                 onTextChange={updateListText}
                 onCheckedChange={updateListChecked}
                 onRemove={removeListItem}
+                onReorder={reorderListItems}
+                onMoveCheckedToEndChange={handleMoveCheckedToEndChange}
               />
             )}
           </Stack>

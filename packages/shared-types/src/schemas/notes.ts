@@ -34,6 +34,7 @@ export const ListNoteContentSchema = z
       .array(ListItemSchema)
       .min(1, "List note must contain at least one item")
       .max(1_000, "List note can contain at most 1000 items"),
+    moveCheckedToEnd: z.boolean().default(false),
   })
   .strict();
 
@@ -96,7 +97,7 @@ const createListNoteContent = z.object({
   if (!result.success) {
     ctx.addIssue({
       code: "custom",
-      message: "For LIST notes, content must be JSON like { items: [{ text, checked }] }",
+      message: "For LIST notes, content must be JSON like { items: [{ text, checked }], moveCheckedToEnd: boolean }",
       path: ["content"],
     });
   }
@@ -139,7 +140,7 @@ const noteContentJsonSchema = noteContentSchema.superRefine((rawContent, ctx) =>
   ctx.addIssue({
     code: "custom",
     message:
-      "Content JSON must match either TEXT shape ({ text: string }) or LIST shape ({ items: [{ text, checked }] })",
+      "Content JSON must match either TEXT shape ({ text: string }) or LIST shape ({ items: [{ text, checked }], moveCheckedToEnd: boolean })",
   });
 });
 

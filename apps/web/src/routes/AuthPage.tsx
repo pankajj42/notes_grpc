@@ -37,6 +37,7 @@ export function AuthPage() {
             <Typography variant="body2">• Mobile-first notes editor for TEXT and LIST notes</Typography>
             <Typography variant="body2">• Per-device session management and revocation</Typography>
             <Typography variant="body2">• Service based architecture using gRPC</Typography>
+            <Typography variant="body2">• Demo Credentials - demo1@example.com / Password123!</Typography>
           </Box>
         </Paper>
         <Box sx={{ flex: 1 }}>
