@@ -19,6 +19,10 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
+    files: ["vitest.unit.config.ts", "vitest.integration.config.ts", "vitest.e2e.config.ts", "tests/e2e/**/*.ts"],
+    ...tseslint.configs.disableTypeChecked,
+  },
+  {
     files: [
       "apps/auth-service/src/**/*.ts",
       "apps/notes-service/src/**/*.ts",

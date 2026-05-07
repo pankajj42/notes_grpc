@@ -1,0 +1,123 @@
+services:
+  auth-db:
+    image: postgres:16
+    container_name: notes-auth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notes_auth
+    ports:
+      - "5434:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notes-db:
+    image: postgres:16
+    container_name: notes-notes-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notes_notes
+    ports:
+      - "5433:5432"
+    volumes:
+      - notes_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notes_notes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build:
+      context: ..
+      dockerfile: apps/auth-service/Dockerfile
+    container_name: notes-auth-service
+    restart: unless-stopped
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      GRPC_PORT: 50051
+      GRPC_TLS_ENABLED: "false"
+      DATABASE_URL: postgresql://postgres:postgres@auth-db:5432/notes_auth
+      DIRECT_URL: postgresql://postgres:postgres@auth-db:5432/notes_auth
+      JWT_ISSUER: notes-auth-service
+      JWT_AUDIENCE: notes-api-gateway
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL_DAYS: "30"
+      RSA_PRIVATE_KEY: ""
+      RSA_PUBLIC_KEY: ""
+    ports:
+      - "50051:50051"
+    command: ["sh", "-c", "pnpm exec prisma migrate deploy ; pnpm start"]
+
+  notes-service:
+    build:
+      context: ..
+      dockerfile: apps/notes-service/Dockerfile
+    container_name: notes-notes-service
+    restart: unless-stopped
+    depends_on:
+      notes-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      GRPC_PORT: 50052
+      GRPC_TLS_ENABLED: "false"
+      DATABASE_URL: postgresql://postgres:postgres@notes-db:5432/notes_notes
+      DIRECT_URL: postgresql://postgres:postgres@notes-db:5432/notes_notes
+    ports:
+      - "50052:50052"
+    command: ["sh", "-c", "pnpm exec prisma migrate deploy ; pnpm start"]
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: apps/gateway/Dockerfile
+    container_name: notes-gateway
+    restart: unless-stopped
+    depends_on:
+      - auth-service
+      - notes-service
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AUTH_SERVICE_URL: auth-service:50051
+      NOTES_SERVICE_URL: notes-service:50052
+      JWT_ISSUER: notes-auth-service
+      JWT_AUDIENCE: notes-api-gateway
+      JWT_REFRESH_TTL_DAYS: "30"
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: lax
+      CORS_ORIGIN: http://localhost:5173
+      GRPC_TLS_ENABLED: "false"
+      GRPC_TLS_CA_PATH: ""
+    ports:
+      - "3000:3000"
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: notes-web
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    environment:
+      NODE_ENV: production
+      VITE_API_BASE_URL: http://localhost:3000
+    ports:
+      - "5173:5173"
+
+volumes:
+  auth_db_data:
+  notes_db_data:

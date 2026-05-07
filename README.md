@@ -259,6 +259,40 @@ VITE_API_BASE_URL="http://localhost:3000"
 
 ---
 
+## Testing and Operations
+
+### Test Commands
+
+```bash
+pnpm test:unit
+pnpm test:integration
+pnpm test:e2e
+pnpm test
+```
+
+### Seed Data
+
+```bash
+pnpm seed
+```
+
+Seed scripts populate:
+- 3 demo users in auth DB
+- 25+ notes across users in notes DB
+- Long text and long list notes for scroll and pagination validation
+
+### Docker Full Stack
+
+```bash
+docker compose -f infra/docker-compose.full.yml up --build
+```
+
+### Deployment and Local Kubernetes Guide
+
+For local deployment, Kubernetes rollout, and stress-testing workflow, use:
+
+- [docs/runbook.md](docs/runbook.md)
+
 ## Security Design
 
 ### Token model
