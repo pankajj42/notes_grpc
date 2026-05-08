@@ -28,10 +28,6 @@ export function getSigningKeyPair(): SigningKeyPair {
     throw new Error("Both RSA_PRIVATE_KEY and RSA_PUBLIC_KEY must be provided together");
   }
 
-  if (config.nodeEnv !== "development" && config.nodeEnv !== "test") {
-    throw new Error("RSA key pair must be provided via env in production");
-  }
-
   const generated = generateKeyPairSync("rsa", {
     modulusLength: 2048,
     publicKeyEncoding: {
@@ -49,7 +45,9 @@ export function getSigningKeyPair(): SigningKeyPair {
     publicKeyPem: generated.publicKey,
   };
 
-  console.warn("[auth-service] RSA keys not set in env; generated ephemeral dev key pair");
+  console.warn(
+    `[auth-service] RSA keys not set in env; generated ephemeral runtime key pair (${config.nodeEnv})`,
+  );
   return cachedKeyPair;
 }
 
