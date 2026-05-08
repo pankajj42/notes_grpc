@@ -4,31 +4,27 @@ import { AppError } from "../middleware/errorHandler.js";
 
 /**
  * Wraps a single gRPC unary call in a promise.
+ * The caller is responsible for managing the client lifecycle — clients
+ * should be long-lived singletons, not created per-request.
  *
  * @param invoke - Calls the gRPC method, passing the callback.
- * @param close  - Closes the gRPC client when the call settles.
  */
-export async function grpcUnaryCall<TResponse>(
+export function grpcUnaryCall<TResponse>(
   invoke: (callback: (error: grpc.ServiceError | null, response: unknown) => void) => void,
-  close: () => void,
 ): Promise<TResponse> {
-  try {
-    return await new Promise<TResponse>((resolve, reject) => {
-      invoke((error, response) => {
-        if (error != null) {
-          reject(error);
-          return;
-        }
-        if (response == null) {
-          reject(new Error("gRPC call returned no response"));
-          return;
-        }
-        resolve(response as TResponse);
-      });
+  return new Promise<TResponse>((resolve, reject) => {
+    invoke((error, response) => {
+      if (error != null) {
+        reject(error);
+        return;
+      }
+      if (response == null) {
+        reject(new Error("gRPC call returned no response"));
+        return;
+      }
+      resolve(response as TResponse);
     });
-  } finally {
-    close();
-  }
+  });
 }
 
 export function toAppError(error: unknown): AppError {

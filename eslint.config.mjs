@@ -36,6 +36,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "apps/web/scripts/**",
       "scripts/**",
+      "tests/load/**",
     ],
   }
 );

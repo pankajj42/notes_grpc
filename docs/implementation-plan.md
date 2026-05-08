@@ -408,6 +408,103 @@ t=4  Legit user next call  → 401, forced to re-login
 
 ---
 
+### 7.3 Notes UX enhancements
+
+**Deliverables**
+- List editor drag-and-drop ordering using `@dnd-kit` with drag handles
+- List content model extended with `moveCheckedToEnd: boolean`
+- When enabled, checked items are grouped after unchecked items
+- Auto-disable `moveCheckedToEnd` when manual reorder or edits violate unchecked-first grouping
+- Notes list pagination UI upgraded with MUI `Pagination` component
+- Text editor multiline content made scrollable for long notes
+
+**Commit**: `feat(web): add list drag-drop, moveCheckedToEnd behavior, and pagination improvements`
+
+---
+
+## Phase 9 — Kubernetes Local Deployment and Load Testing
+
+### 9.1 Kubernetes manifests
+
+**Deliverables** (`infra/k8s/`)
+- `namespace.yaml` — `notes` namespace
+- `configmap.yaml` — non-secret env vars shared across services
+- `secrets.yaml` — DATABASE_URL, JWT keys (gitignored)
+- `auth-db.yaml`, `notes-db.yaml` — Postgres 16 StatefulSets with PVCs (`storageClassName: standard`, 5 Gi)
+- `auth-service.yaml`, `notes-service.yaml` — Deployments (replicas: 2) + headless Services + HPAs (2–10 pods, CPU 60%)
+- `gateway.yaml` — Deployment (replicas: 2) + ClusterIP Service + HPA + HTTP `/health` readiness probe
+- `web.yaml` — Deployment (replicas: 1) + ClusterIP Service + HTTP `/` readiness probe
+- `ingress.yaml` — nginx ingress for host `notes.local`; `/api(/|$)(.*)` → gateway:3000, `/` → web:5173
+- gRPC services use `tcpSocket` readiness probes (minikube does not support the `grpc` probe type by default)
+- Both service deployments include an **init container** that runs `prisma migrate deploy` before the main container starts, ensuring schema is always up to date on pod creation
+
+**Root scripts** (added to `package.json`)
+```json
+"k8:apply": "kubectl apply -f infra/k8s/namespace.yaml && kubectl apply -f infra/k8s/configmap.yaml -f infra/k8s/secrets.yaml -f ...",
+"k8:delete": "kubectl delete -f infra/k8s --ignore-not-found"
+```
+`k8:apply` applies `namespace.yaml` first explicitly to avoid ordering failures when kubectl processes the directory non-deterministically.
+
+**Commit**: `feat(infra): add Kubernetes manifests with HPAs and Prisma migration init containers`
+
+---
+
+### 9.2 Local cluster networking (minikube + Docker driver)
+
+When running minikube with the **Docker driver** on Windows, the cluster VM IP (`192.168.49.2`) lives inside Docker's internal network and is not reachable from the Windows host directly.
+
+**Required one-time setup:**
+
+1. **Add `notes.local` to the Windows hosts file** (run PowerShell as Administrator):
+   ```powershell
+   Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "127.0.0.1  notes.local"
+   ```
+   To undo / remove the entry:
+   ```powershell
+   (Get-Content "C:\Windows\System32\drivers\etc\hosts") |
+     Where-Object { $_ -notmatch "notes\.local" } |
+     Set-Content "C:\Windows\System32\drivers\etc\hosts"
+   ```
+
+2. **Start the minikube tunnel** (keep this terminal open while developing/testing):
+   ```powershell
+   minikube tunnel
+   ```
+   The tunnel routes ingress traffic from `127.0.0.1:80` through to the nginx ingress controller inside the cluster. Without the tunnel, all HTTP requests to `notes.local` time out even though DNS resolves correctly.
+
+**Commit**: `docs: document minikube tunnel and hosts file setup for local cluster access`
+
+---
+
+### 9.3 Load testing with k6
+
+**Deliverables**
+- `tests/load/stress.js` — k6 script
+  - Ramp: 0→50 VUs (1 min), hold (3 min), 50→100 VUs (1 min), hold (3 min), ramp down (1 min)
+  - Per-VU flow: signup → create note → list notes → sleep 1 s
+  - Thresholds: `http_req_failed rate<0.01`, `http_req_duration p(95)<500`
+  - Guards `signup.status !== 201` before calling `.json()` to avoid crashes when requests fail
+- Root script: `"test:load": "k6 run tests/load/stress.js"`
+
+**Running the load test**
+```powershell
+# Terminal 1 — keep running
+minikube tunnel
+
+# Terminal 2
+pnpm test:load
+```
+
+**Watching autoscaling**
+```powershell
+kubectl get hpa -n notes -w
+kubectl get pods -n notes -w
+```
+
+**Commit**: `feat(tests): add k6 load test with ramp-up stages and autoscaling validation`
+
+---
+
 ## Phase 8 — Quality and Observability
 
 ### 8.1 Tests
@@ -430,6 +527,29 @@ t=4  Legit user next call  → 401, forced to re-login
 - Log security events with `event: "security"` tag
 
 **Commit**: `feat(obs): add structured Pino logging and correlation ID propagation`
+
+---
+
+## Phase 9 — Local Kubernetes and Scale Validation
+
+### 9.1 Local K8s manifests
+
+**Deliverables**
+- `infra/k8s` namespace, configmap, secrets
+- StatefulSets for auth and notes Postgres
+- Deployments + Services + HPAs for auth-service, notes-service, gateway
+- Deployment + Service for web
+- Ingress for `notes.local` and `/api` gateway routing
+
+**Commit**: `feat(infra): add local Kubernetes manifests for full stack deployment`
+
+### 9.2 Stress testing
+
+**Deliverables**
+- `tests/load/stress.js` k6 script driving signup, create-note, list-notes traffic
+- HPA verification workflow via `kubectl get hpa/pods/top`
+
+**Commit**: `test(perf): add k6 stress scenario for autoscaling validation`
 
 ---
 

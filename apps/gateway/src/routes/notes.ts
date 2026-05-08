@@ -29,6 +29,16 @@ import { AppError } from "../middleware/errorHandler.js";
 import { validate } from "../middleware/validate.js";
 import { grpcUnaryCall, toAppError } from "../lib/grpc.js";
 
+// Singleton client — gRPC channels are designed to be long-lived and shared.
+// Creating a new client per-request creates a new HTTP/2 connection each time.
+let notesClient: NotesServiceClient | null = null;
+function getNotesClient(): NotesServiceClient {
+  if (notesClient === null) {
+    notesClient = createNotesServiceClient(config.notesServiceUrl);
+  }
+  return notesClient;
+}
+
 export function createNotesRouter(): Router {
   const router = Router();
 
@@ -125,8 +135,7 @@ type GrpcCreateNoteRequest = Omit<CreateNoteRequest, "contentType"> & {
 function callNotes<TResponse>(
   fn: (client: NotesServiceClient, cb: (error: grpc.ServiceError | null, response: unknown) => void) => void,
 ): Promise<TResponse> {
-  const client = createNotesServiceClient(config.notesServiceUrl);
-  return grpcUnaryCall<TResponse>((cb) => fn(client, cb), () => client.close());
+  return grpcUnaryCall<TResponse>((cb) => fn(getNotesClient(), cb));
 }
 
 function getAuthenticatedUser(user: Express.Request["user"]): { userId: string; sessionId: string } {

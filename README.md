@@ -91,9 +91,14 @@ notes_grpc/
 │   ├── grpc-clients/      # Shared gRPC client factories
 │   └── shared-types/      # Canonical error codes + HTTP envelope types
 ├── infra/
-│   └── docker-compose.yml # Local Postgres databases
+│   ├── docker-compose.yml # Local Postgres databases
+│   └── k8s/              # Local Kubernetes manifests (Deployments, HPA, Ingress)
+├── tests/
+│   └── load/             # k6 stress test scripts
 ├── docs/
-│   └── implementation-plan.md
+│   ├── implementation-plan.md
+│   ├── runbook.md
+│   └── k8.md
 └── README.md
 ```
 
@@ -252,10 +257,17 @@ VITE_API_BASE_URL="http://localhost:3000"
     "items": [
       { "text": "Milk",   "checked": false },
       { "text": "Eggs",   "checked": true  }
-    ]
+    ],
+    "moveCheckedToEnd": true
   }
 }
 ```
+
+When `moveCheckedToEnd` is enabled in the list editor:
+- Checked items are grouped below unchecked items.
+- Toggling an unchecked item to checked moves it to the top of the checked section.
+- Toggling a checked item to unchecked moves it to the boundary (end of unchecked section).
+- If drag-and-drop or new-item edits violate unchecked-first ordering, the toggle is automatically disabled in the editor.
 
 ---
 
@@ -268,6 +280,7 @@ pnpm test:unit
 pnpm test:integration
 pnpm test:e2e
 pnpm test
+pnpm test:load   # requires k6
 ```
 
 ### Seed Data
@@ -292,6 +305,25 @@ docker compose -f infra/docker-compose.full.yml up --build
 For local deployment, Kubernetes rollout, and stress-testing workflow, use:
 
 - [docs/runbook.md](docs/runbook.md)
+- [docs/k8.md](docs/k8.md)
+
+Quick command set:
+
+```bash
+# Build images into minikube's Docker daemon
+minikube docker-env --shell powershell | Invoke-Expression
+
+docker build -f apps/auth-service/Dockerfile  -t notes/auth-service:dev .
+docker build -f apps/notes-service/Dockerfile -t notes/notes-service:dev .
+docker build -f apps/gateway/Dockerfile       -t notes/gateway:dev .
+docker build -f apps/web/Dockerfile           -t notes/web:dev .
+
+# Deploy manifests
+kubectl apply -f infra/k8s
+
+# Stress test
+k6 run tests/load/stress.js
+```
 
 ## Security Design
 
@@ -423,3 +455,44 @@ See [docs/implementation-plan.md](docs/implementation-plan.md) for the full incr
 | 6 | Security hardening — rotation, reuse detection, rate limiting |
 | 7 | React frontend |
 | 8 | Testing and observability |
+| 9 | Kubernetes deployment + load testing |
+
+---
+
+## Further Improvements
+
+The following areas are candidates for future iteration, roughly ordered by impact.
+
+### Authentication & Identity
+- **OTP-based email verification** — require users to confirm their address with a one-time code before account activation, blocking disposable-email abuse.
+- **Forgot-password / reset flow** — time-limited signed reset tokens delivered via email (e.g. via Resend or SendGrid).
+- **OAuth 2.0 / social login** — add Google and GitHub providers (Passport.js or a dedicated lib like `arctic`) so users can sign in without a password.
+
+### Mobile
+- **React Native client** — share validation schemas and API contracts from `packages/shared-types`; reuse the same gateway REST API with no backend changes.
+
+### Real-time & Collaboration
+- **WebSocket / SSE sync** — push note change events to connected clients so multiple tabs or devices stay in sync without polling.
+- **Note sharing & collaboration** — per-note ACL (owner / editor / viewer) with conflict-free merging (e.g. using CRDTs or operational transforms).
+
+### Data & Search
+- **Full-text search** — add a `tsvector` GIN index in Postgres and expose a `/notes/search` endpoint; later migrate to Elasticsearch or Typesense if the corpus grows.
+- **Note tagging / labels** — many-to-many tag model with filtered list endpoint.
+- **Archive & trash** — soft-delete with a recycle-bin TTL before permanent removal.
+- **Import / export** — bulk Markdown export and import (zip bundle or single-file), making it easy to migrate data.
+
+### Security
+- **End-to-end encryption** — encrypt note bodies client-side (e.g. AES-GCM with a key derived from the user's password) so the server never sees plaintext content.
+- **Audit log** — append-only event log (user created, note deleted, login from new device, etc.) for compliance and abuse investigation.
+
+### Operations & Infrastructure
+- **CI/CD pipeline** — GitHub Actions workflow: lint → unit tests → integration tests → build images → push to registry → rolling deploy to staging.
+- **Helm charts** — package the K8s manifests as a Helm chart with a `values.yaml` for environment-specific overrides (image tags, replica counts, resource limits).
+- **Prometheus + Grafana observability** — instrument the gateway and gRPC services with `prom-client`; deploy a Prometheus scrape config and a pre-built Grafana dashboard for RPS, latency, and error rate.
+- **Horizontal pod autoscaling** — HPA objects for gateway, auth-service, and notes-service based on CPU and custom RPS metrics.
+
+### Frontend (Web)
+- **Dark mode** — system-preference-aware `prefers-color-scheme` toggle persisted to `localStorage`.
+- **PWA / offline support** — service-worker caching for the app shell and a local IndexedDB queue that replays mutations when connectivity returns.
+- **Internationalization (i18n)** — `react-i18next` with locale files; auto-detect browser language with a manual override.
+- **Admin dashboard** — internal-only route (behind a role check) showing active sessions, registered users, and aggregate note counts.

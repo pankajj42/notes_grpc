@@ -36,6 +36,16 @@ const sessionIdParamsSchema = z.object({ id: sessionIdSchema });
 
 type AuthServiceClient = ReturnType<typeof createAuthServiceClient>;
 
+// Singleton client — gRPC channels are designed to be long-lived and shared.
+// Creating a new client per-request creates a new HTTP/2 connection each time.
+let authClient: AuthServiceClient | null = null;
+function getAuthClient(): AuthServiceClient {
+  if (authClient === null) {
+    authClient = createAuthServiceClient(config.authServiceUrl);
+  }
+  return authClient;
+}
+
 type HttpAuthPayload = {
   tokens: { accessToken: string; refreshToken: string };
   user: SignupResponse["user"];
@@ -157,8 +167,7 @@ export function createAuthRouter(): Router {
 function callAuth<TResponse>(
   fn: (client: AuthServiceClient, cb: (error: grpc.ServiceError | null, response: unknown) => void) => void,
 ): Promise<TResponse> {
-  const client = createAuthServiceClient(config.authServiceUrl);
-  return grpcUnaryCall<TResponse>((cb) => fn(client, cb), () => client.close());
+  return grpcUnaryCall<TResponse>((cb) => fn(getAuthClient(), cb));
 }
 
 function toHttpAuthPayload(response: SignupResponse | LoginResponse): HttpAuthPayload {

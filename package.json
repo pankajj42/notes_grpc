@@ -21,7 +21,10 @@
     "test": "pnpm test:unit && pnpm test:integration && pnpm test:e2e",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:load": "k6 run tests/load/stress.js",
+    "k8:apply": "kubectl apply -f infra/k8s/namespace.yaml && kubectl apply -f infra/k8s/configmap.yaml -f infra/k8s/secrets.yaml -f infra/k8s/auth-db.yaml -f infra/k8s/notes-db.yaml -f infra/k8s/auth-service.yaml -f infra/k8s/notes-service.yaml -f infra/k8s/gateway.yaml -f infra/k8s/web.yaml -f infra/k8s/ingress.yaml",
+    "k8:delete": "kubectl delete -f infra/k8s --ignore-not-found"
   },
   "keywords": [],
   "author": "Pankaj Jangid",

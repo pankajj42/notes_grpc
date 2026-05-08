@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: notes-db
+  namespace: notes
+spec:
+  serviceName: notes-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notes-db
+  template:
+    metadata:
+      labels:
+        app: notes-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: notes
+            - name: POSTGRES_USER
+              value: notes
+            - name: POSTGRES_PASSWORD
+              value: secret
+          volumeMounts:
+            - name: notes-db-data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+  volumeClaimTemplates:
+    - metadata:
+        name: notes-db-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: standard
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notes-db
+  namespace: notes
+spec:
+  selector:
+    app: notes-db
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

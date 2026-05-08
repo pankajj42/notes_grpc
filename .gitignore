@@ -10,6 +10,9 @@ build/
 .env.local
 .env.*.local
 
+# Local Kubernetes secrets
+infra/k8s/secrets.yaml
+
 # TypeScript cache
 *.tsbuildinfo
 

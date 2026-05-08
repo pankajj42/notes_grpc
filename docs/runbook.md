@@ -137,61 +137,122 @@ docker compose -f infra/docker-compose.full.yml down
 - Enforce DB backup and migration workflow (`prisma migrate deploy`)
 - Configure log shipping (Pino JSON to ELK/Loki/Datadog)
 
-## 6. Local Kubernetes Plan (Minikube / Kind)
+## 6. Local Kubernetes Plan (Minikube)
 
-### Step 1: create cluster and metrics
+Concrete manifests are provided under `infra/k8s`:
+- namespace, configmap, secrets
+- auth-db + notes-db StatefulSets
+- auth-service + notes-service + gateway Deployments/Services/HPAs
+- web Deployment/Service
+- ingress for `notes.local` with `/api` routed to gateway
+
+### Step 1: start cluster and addons
 
 ```bash
-minikube start --cpus=4 --memory=8192
+minikube start --cpus=4 --memory=8192 --driver=docker
 minikube addons enable metrics-server
+minikube addons enable ingress
 ```
 
-### Step 2: build images for local cluster
+### Step 2: build images in minikube docker daemon
 
 ```bash
-eval $(minikube docker-env)
-docker build -f apps/auth-service/Dockerfile -t notes/auth-service:local .
-docker build -f apps/notes-service/Dockerfile -t notes/notes-service:local .
-docker build -f apps/gateway/Dockerfile -t notes/gateway:local .
-docker build -f apps/web/Dockerfile -t notes/web:local .
+minikube docker-env --shell powershell | Invoke-Expression
+
+docker build -f apps/auth-service/Dockerfile  -t notes/auth-service:dev .
+docker build -f apps/notes-service/Dockerfile -t notes/notes-service:dev .
+docker build -f apps/gateway/Dockerfile       -t notes/gateway:dev .
+docker build -f apps/web/Dockerfile           -t notes/web:dev .
 ```
 
-### Step 3: deploy each service separately
-- Create one Deployment + Service per app.
-- Inject env vars via ConfigMaps and Secrets.
-- Start with replicas:
-  - auth-service: 2
-  - notes-service: 2
-  - gateway: 2
-  - web: 1
-
-### Step 4: expose gateway/web
-- Use `Ingress` or `NodePort`.
-- Keep internal services cluster-only (`ClusterIP`).
-
-### Step 5: autoscaling
-- Add HPA for `gateway`, `auth-service`, `notes-service`.
-- Example target:
-  - min replicas: 2
-  - max replicas: 10
-  - CPU target: 60%
-
-### Step 6: stress test
-Use k6 against gateway endpoints:
+### Step 3: configure host + secrets
 
 ```bash
-k6 run ./tests/perf/smoke.js
+# Windows + minikube docker driver: map notes.local to localhost
+# Run PowerShell as Administrator
+Add-Content -Path "C:\\Windows\\System32\\drivers\\etc\\hosts" -Value "127.0.0.1  notes.local"
+
+# Keep this running in a separate terminal while testing
+minikube tunnel
 ```
 
-During load, check scaling:
+Edit `infra/k8s/secrets.yaml` and replace placeholder RSA keys / DB values.
+
+### Step 4: deploy
 
 ```bash
-kubectl get hpa -w
-kubectl get pods -w
-kubectl top pods
+pnpm k8:apply
+kubectl get pods -n notes -w
 ```
 
-If load is sustained and resource thresholds are crossed, replica counts should increase.
+### Step 5: stress and verify autoscaling
+
+```bash
+k6 run tests/load/stress.js
+```
+
+In parallel:
+
+```bash
+kubectl get hpa -n notes -w
+kubectl get pods -n notes -w
+kubectl top pods -n notes
+```
+
+Expected behavior:
+- replica counts increase as CPU crosses HPA target (60%)
+- pods scale down after sustained lower utilization
+
+### Troubleshooting load-test failures
+
+- Symptom: `lookup notes.local: no such host`
+  - Fix: add `127.0.0.1 notes.local` to the hosts file.
+
+- Symptom: `list 200` / `create 201` checks fail with ~44% failure rate; k6 shows `request timeout` errors; timeouts start around the 100 VU mark
+  - Cause: gateway was creating a new gRPC client (full TCP/HTTP2 connection) on every HTTP request and closing it immediately. Under high concurrency this creates hundreds of short-lived connections per second, exhausting the event loop and the backend services.
+  - Fix: `createNotesServiceClient` and `createAuthServiceClient` are now module-level singletons in `apps/gateway/src/routes/notes.ts` and `auth.ts`. The `close()` parameter was removed from `grpcUnaryCall` — clients must be long-lived. This change requires rebuilding and redeploying the gateway image.
+
+- Symptom: HPA scales gateway to 7+ pods but several stay `Pending`; `kubectl describe pod` shows `Insufficient cpu`
+  - Cause: minikube single-node cluster has 2 CPUs. With 100m CPU requests per pod, 7 gateway + 2 auth + 3 notes + 2 DB pods = ~1400m plus system overhead hits the 2000m ceiling.
+  - Fix: CPU requests for `gateway`, `auth-service`, and `notes-service` are lowered to `50m` in their K8s manifests. Set HPA `maxReplicas` to `4` for this 2-CPU minikube profile, then run:
+    ```bash
+    pnpm k8:apply
+    kubectl scale deployment/auth-service deployment/notes-service deployment/gateway -n notes --replicas=2
+    ```
+
+- Symptom: `dial tcp 192.168.49.2:80 ... failed to respond`
+  - Cause: with minikube Docker driver on Windows, the minikube VM IP is not directly reachable from host.
+  - Fix: keep `minikube tunnel` running and keep hosts entry as `127.0.0.1 notes.local`.
+
+- Symptom: `public-key` or `signup` fails with `Unable to connect to the remote server`, and `Test-NetConnection notes.local -Port 80` is false
+  - Cause: stale or dead minikube tunnel process.
+  - Fix: stop stale tunnel process and start a fresh tunnel:
+    ```bash
+    Get-Process minikube -ErrorAction SilentlyContinue | Stop-Process -Force
+    minikube tunnel
+    ```
+
+- Symptom: setup fails with `status=500` and message `secretOrPrivateKey must be an asymmetric key when using RS256`
+  - Cause: `notes-secrets` contains placeholder/invalid JWT key values (often overwritten by `infra/k8s/secrets.yaml`).
+  - Fix: patch `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` in the `notes-secrets` secret with a valid RSA keypair, then restart auth + gateway.
+
+- Symptom: k6 shows all checks failed for `signup 201`, with low latency and non-zero data transfer
+  - Common cause: gateway signup rate limiter (`20/hour`) returns `429` under repeated signup loops.
+  - Fix: use the current `tests/load/stress.js` flow (signup once in `setup()`, then note create/list in VUs).
+  - If a prior run exhausted limiter state, reset it with:
+    ```bash
+    kubectl rollout restart deployment/gateway -n notes
+    kubectl rollout status deployment/gateway -n notes
+    ```
+
+- Symptom: signup fails with server errors and auth logs include `The table public.users does not exist`
+  - Cause: migrations not applied in cluster.
+  - Fix now (one-off):
+    ```bash
+    kubectl exec -n notes deployment/auth-service -- sh -c "cd /workspace/apps/auth-service && pnpm exec prisma migrate deploy"
+    kubectl exec -n notes deployment/notes-service -- sh -c "cd /workspace/apps/notes-service && pnpm exec prisma migrate deploy"
+    ```
+  - Preventative: `auth-service` and `notes-service` manifests include migration init containers.
 
 ## 7. Notes on Scope
 
