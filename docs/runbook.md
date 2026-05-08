@@ -205,6 +205,10 @@ Expected behavior:
 
 ### Troubleshooting load-test failures
 
+- Symptom: all checks pass (0% http_req_failed, 100% signup/create/list) but threshold `p(95)<500` still crosses
+  - Cause: the 500ms p(95) threshold is calibrated for production (multi-node, SSD-backed DB). A single-node minikube cluster under 100 VUs will typically land at p(95) ~1.2–1.8s due to shared CPU/IO.
+  - Fix: `tests/load/stress.js` uses `p(95)<2000` for local K8s. Tighten back to `p(95)<500` when deploying to Render or a production cluster.
+
 - Symptom: `lookup notes.local: no such host`
   - Fix: add `127.0.0.1 notes.local` to the hosts file.
 
